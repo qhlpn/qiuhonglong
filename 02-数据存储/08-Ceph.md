@@ -177,12 +177,11 @@
   
   # 配置 site.yml
   cd ceph-ansible
-cp site.yml.sample site.yml
+  cp site.yml.sample site.yml
   
   # 注释掉不用的 hosts
   # 注释掉 - import_playbook: dashboard.yml
   ```
-  
 
 
 
@@ -498,9 +497,9 @@ ceph health detail
 
 
 
-#### 3.4 RADOS存储
+#### 3.4 Rados存储
 
->  一个文件首先按照配置的大小切分成多个对象，对象经过哈希算法映射到不同的归置组PG中，每个PG再通过C-RUSH算法将对象存储到经状态过滤的多个OSD中（第一个OSD是主节点，其它的是副本从节点）。
+>  一个文件首先按照配置的大小切分成多个对象，对象经过哈希算法映射到不同的归置组PG中，整个PG再通过Crush算法映射到多个OSD中（第一个OSD是主节点，其它的是副本从节点）。
 
 <img src=".\pictures\image-20210108092906061.png" alt="image-20210108092906061" style="zoom: 80%;" />
 
@@ -508,7 +507,7 @@ ceph health detail
 
 + **File：**用户需要存储或访问的文件
 + **Objects：**RADOS基本存储单元，即对象，由File进行切分（ID / Binary Data / Metadata）
-+ **PG(Placement Group)：**一个PG包含Objects，一个PG映射到多个OSD上（一主多从）。是实现上的逻辑概念，物理上不存在。PG数量固定，不会随着OSD动态伸缩。
++ **PG(Placement Group)：**一个PG包含Objects，整个PG映射到多个OSD上（一主多从）。是实现上的逻辑概念，物理上不存在。PG数量固定，不会随着OSD动态伸缩。
 + **PGP：**相当于PG存放的OSD副本排列组合。假设PG映射到3个osd，即osd1，osd2，osd3，副本数为2，如果pgp=1，那么pg存放的副本osd的组合就有一种，比如（osd1, osd2）
 + **Pool**：对多个PG设置相同的Namespace，定义成逻辑概念上的Pool，可以对不同的业务场景做隔离（pool size 即 PG 映射到 size 个 osd）
 + **OSDs：**每一块物理硬盘对应一个osd进程。每个OSD上分布多个PG，每个PG会自动散落在不同OSD上。如果扩容OSD，那么相应的PG会进行迁移到新的OSD上，保证每个OSD上的PG数量均衡
@@ -518,7 +517,7 @@ ceph health detail
 
 
 
-#### 3.5 CRUSH算法
+#### 3.5 Crush算法
 
 > Object在通过PG存储到实际的OSD设备上时，会通过C-RUSH算法，按照预定好的规则选择N个OSD进行存储，即CRUSH(pgid) --> (osd1,osd2 ...)。不同对象存储到OSD设备位置无必然联系，对相同对象进行重复计算，其存储位置必然相同。	
 
@@ -532,6 +531,28 @@ ceph health detail
 
 
 
-#### 3.6 PG 状态
+#### 3.6 Place Group
 
-+ 
+> https://blog.csdn.net/weixin_44389885/article/details/86621686
+> $ ceph health detail
+> 正常状态：100% active + clean
+
+| 状态       | 描述                                                         |
+| ---------- | ------------------------------------------------------------ |
+| Active     | 活跃态。PG可以正常处理来自客户端的读写请求                   |
+| Clean      | 干净态。PG当前不存在待修复的对象， Acting Set和Up Set内容一致，并且大小等于存储池的副本数 |
+| Activating | Peering已经完成，PG正在等待所有PG实例同步并固化Peering的结果（Info、Log等） |
+|            |                                                              |
+| Degraded   | 降级态。Peering完成后，PG检测到存在不一致（需要被同步/修复）的OSD对象，或者当前 ActingSet（OSD进程） 小于存储池副本数 |
+| Undersized | 当前 ActingSet（OSD进程） 小于存储池副本数 // Degraded + Undersized 仍可以正常读写 |
+|            |                                                              |
+| Peering    | 正在同步态。PG正在执行同步处理                               |
+| Peered     | 等待态。Peering已经完成。但是 PG当前 Acting Set 规模小于存储池最小副本数（min_size）// 此时 IO 将阻塞挂起，无法读写 |
+| Remapped   | 重映射态。Peering已经完成，但 ActingSet 与 UpSet 不一致。// 可正常读写（在OSD挂掉或扩容时，PG会按照Crush算法重新分配PG所属OSD编号，并把PGRemap到新OSD） |
+|            |                                                              |
+| Recovery   | PG 通过 PGLog 针对数据不一致的OSD对象进行同步修复。 // PGLog 在osd_max_pg_log_entries=10000条以内时，可通过PGLog增量恢复数据 |
+| Backfill   | PG 无法通过 PGLog 恢复所需数据，则需要通过完全拷贝当前 OSD Primary 进行全量同步 // 如果 PGLog 超过osd_max_pg_log_entries=10000条， 这个时候需要全量恢复数据 |
+|            |                                                              |
+| Stale      | 未刷新态。 PG 存储的所有 OSD 都挂掉（单个挂掉可转移）；或者 Mon 没有检测到 OSD Primary 统计信息（网络抖动） |
+| Down       | 宕机态。当前剩余在线的 OSD 不足以完成数据修复                |
+
