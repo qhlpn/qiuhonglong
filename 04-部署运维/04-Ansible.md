@@ -256,21 +256,23 @@ ansibel具有幂等性，多次playbook执行后的主机状态应相同
     ```
     变量名：仅能由字母、数字和下划线组成，且只能以字母开头
     变量来源：
-        1 ansible setup facts 远程主机的所有变量都可直接调用 (系统自带变量)
-           setup模块可以实现系统中很多系统信息的显示
-                    可以返回每个主机的系统信息包括:版本、主机名、cpu、内存
+        1 ansible setup facts 系统变量
+           setup 模块可以实现系统信息的显示
+                 可以返回每个主机的系统信息包括:版本、主机名、cpu、内存
            ansible all -m setup -a 'filter="ansible_nodename"'     查询主机名    
-        2 在/etc/ansible/hosts(主机清单)中定义变量
-            普通变量：主机组中主机单独定义，优先级高于公共变量(单个主机)
-            公共(组)变量：针对主机组中所有主机定义统一变量(一组主机的同一类别)  
-        3 通过命令行指定变量，优先级最高
+        2 /etc/ansible/hosts 定义
+            普通变量：主机组中主机单独定义，优先级高于公共变量（单个主机）
+            公共（组）变量：针对主机组中所有主机定义统一变量（一组主机的同一类别）
+        3 命令行 定义，优先级最高
            ansible-playbook –e varname=value  
-        4 在playbook中定义
+        4 vars 定义
            vars:
             - var1: value1
             - var2: value2    
-        5 在独立的变量YAML文件中定义    
-        6 在role中定义
+        6 role 定义：defaults/main.yml
+        7 set_fact 定义
+        	set_fact:
+        	  key: value
     
     变量定义：key=value
     
@@ -289,7 +291,7 @@ ansibel具有幂等性，多次playbook执行后的主机状态应相同
     调用变量
     ansible appsrvs -m hostname -a'name={{name}}'  更改主机名为各自被定义的变量 
     
-    2. 使用setup变量
+    2. 使用 setup 变量
     - hosts: websrvs
       remote_user: root
       tasks:
@@ -310,11 +312,14 @@ ansibel具有幂等性，多次playbook执行后的主机状态应相同
         - name: create httpd log
           file: name=/app/{{ var1 }}.log state=touch
         - name: create nginx log
-          file: name=/app/{{ var2 }}.log state=touch
+        file: name=/app/{{ var2 }}.log state=touch
+          
+  优先级：
+    https://www.cnblogs.com/mauricewei/p/10054300.html
     ```
-
+  
   + **templates**
-
+  
     ```
     文本文件，嵌套有脚本（使用模板编程语言编写） 借助模板生成真正的文件
     Jinja2语言，使用字面量，有下面形式
@@ -324,14 +329,14 @@ ansibel具有幂等性，多次playbook执行后的主机状态应相同
         元组：(item1, item2, ...)
         字典：{key1:value1, key2:value2, ...}
         布尔型：true/false
-    算术运算：+, -, *, /, //, %, **
+  算术运算：+, -, *, /, //, %, **
     比较操作：==, !=, >, >=, <, <=
-    逻辑运算：and，or，not
+  逻辑运算：and，or，not
     流表达式：For，If，When
     ```
-
+  
   + **when**
-
+  
     ```
     条件测试:如果需要根据变量、facts或此前任务的执行结果来做为某task执行与否的前提时要用到条件测试,
     通过when语句实现，在task中使用，jinja2的语法格式
@@ -355,14 +360,14 @@ ansibel具有幂等性，多次playbook执行后的主机状态应相同
         when: result|failed
       - command: /bin/something_else
         when: result|success
-      - command: /bin/still/something_else
+    - command: /bin/still/something_else
         when: result|skipped
-    
+  
     此外，when语句中还可以使用facts或playbook中定义的变量
     ```
-
+  
   + **with_items**
-
+  
     ```
     循环：当有需要重复性执行的任务时，可以使用迭代机制
     对迭代项的引用，固定变量名为 item
@@ -376,20 +381,15 @@ ansibel具有幂等性，多次playbook执行后的主机状态应相同
         - testuser2
     
     上面语句的功能等同于下面的语句：
-    - name: add user testuser1
+  - name: add user testuser1
       user: name=testuser1 state=present groups=wheel
-    - name: add user testuser2
+  - name: add user testuser2
       user: name=testuser2 state=present groups=wheel
     ```
-
+  
   + **roles**
-
+  
     ```
-    用于层次性、结构化地组织playbook
-    roles能够根据层次型结构自动装载变量文件、tasks以及handlers等。
-    要使用roles只需要在playbook中使用include指令即可。
-    简单来讲，roles就是通过分别将变量、文件、任务、模板及处理器放置于单独的目录中，
-    并可以便捷地include它们的一种机制。
-    角色一般用于基于主机构建服务的场景中，但也可以是用于构建守护进程等场景中
+    roles 通过分别将变量、文件、任务、模板及处理器放置于单独的目录，用于层次性、结构化地组织 playbook，通过 include 引入
     https://www.wumingx.com/linux/ansible-roles.html
     ```
