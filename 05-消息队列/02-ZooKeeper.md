@@ -11,7 +11,7 @@
 
 + **数据模型：Tree **
 
-  <img src="E:\projects\grocery\qiuhonglong\05-消息队列\pictures\image-20201209194329666.png" alt="image-20201209194329666" style="zoom:90%;" />
+  <img src="pictures\image-20201209194329666.png" alt="image-20201209194329666" style="zoom:90%;" />
 
 + **数据节点：ZNode**
 
@@ -32,7 +32,7 @@
 
 + **Watcher 客户端监听器**
 
-  <img src="E:\projects\grocery\qiuhonglong\05-消息队列\pictures\image-20201209200251835.png" alt="image-20201209200251835" style="zoom:90%;" />
+  <img src="pictures\image-20201209200251835.png" alt="image-20201209200251835" style="zoom:90%;" />
 
 + **Session 会话**
 
@@ -47,7 +47,7 @@
 
 ### Zookeeper 集群 【Zab协议】
 
-<img src="E:\projects\grocery\qiuhonglong\05-消息队列\pictures\image-20201209202004775.png" alt="image-20201209202004775" style="zoom:90%;" />
+<img src="pictures\image-20201209202004775.png" alt="image-20201209202004775" style="zoom:90%;" />
 
 > 在 ZooKeeper 中除了 Leader / Follower，还引入了 **Observer** 角色
 >

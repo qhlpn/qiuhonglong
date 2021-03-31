@@ -1,191 +1,194 @@
 ### 1 Ceph集群搭建
 
-#### 1.1 配置环境
+#### 1.1 ceph-ansible 部署
 
-+ 配置IP和网络，比如
++ **配置主机环境**
 
-  ```shell
-  # 管理机：   10.190.180.240
-  # Ceph集群： 10.190.180.241 ~ 10.190.180.243
-  vi /etc/sysconfig/network-scripts/ifcfg-eth0
-  # 配置以下属性
-      BOOTPROTO=static
-      ONBOOT=yes
-      IPADDR=10.190.180.240
-      GATEWAY=10.190.181.254
-      NETMASK=255.255.254.0
-      DNS1=202.96.134.133
-      DNS2=202.96.128.86
-  systemctl restart network.service
-  ```
+    + 配置IP和网络，比如
 
-+ 关闭防火墙和SELinux
+      ```shell
+      # 管理机：   10.190.180.240
+      # Ceph集群： 10.190.180.241 ~ 10.190.180.243
+      vi /etc/sysconfig/network-scripts/ifcfg-eth0
+      # 配置以下属性
+          BOOTPROTO=static
+          ONBOOT=yes
+          IPADDR=10.190.180.240
+          GATEWAY=10.190.181.254
+          NETMASK=255.255.254.0
+          DNS1=202.96.134.133
+          DNS2=202.96.128.86
+      systemctl restart network.service
+      ```
 
-  ```shell
-  # 所有机子
-  systemctl stop firewalld
-  systemctl disable firewalld
-  systemctl status firewalld
-  setenforce 0
-  vi /etc/selinux/config  # 修改 selinux=disabled
-  ```
+    + 关闭防火墙和SELinux
 
-+ 设置时钟源
+      ```shell
+      # 所有机子
+      systemctl stop firewalld
+      systemctl disable firewalld
+      systemctl status firewalld
+      setenforce 0
+      vi /etc/selinux/config  # 修改 selinux=disabled
+      
+      # firewalld 结构和使用
+      # http://www.excelib.com/article/287/show/#I8ClPj
+      # https://blog.csdn.net/yl3395017/article/details/105215027
+      ```
 
-  ```shell
-  # 所有机子
-  yum install ntp -y
-  # 集群机子
-  vi /etc/ntp.conf  # 修改 server 10.190.180.240 iburst
-  # 所有机子
-  systemctl restart ntpd
-  systemctl enable ntpd
-  ntpq -pn
-  ```
+    + 设置时钟源
 
-+ 配置YUM源
+      ```shell
+      # 所有机子
+      yum install ntp -y
+      # 集群机子
+      vi /etc/ntp.conf  # 修改 server 10.190.180.240 iburst
+      # 所有机子
+      systemctl restart ntpd
+      systemctl enable ntpd
+      ntpq -pn
+      ```
 
-  ```shell
-  # 所有机子
-  cd /etc/yum.repos.d/
-  vi /etc/yum.repos.d/internal.repo
-  # 配置以下属性
-  	[internal]
-      name=internal
-      baseurl=内网仓库地址
-      enabled=1
-      gpgcheck=0
-      priority=1
-  yum repolist
-  ```
+    + 配置YUM源
 
-+ 磁盘分区
+      ```shell
+      # 所有机子
+      cd /etc/yum.repos.d/
+      vi /etc/yum.repos.d/internal.repo
+      # 配置以下属性
+        [internal]
+          name=internal
+          baseurl=内网仓库地址
+          enabled=1
+          gpgcheck=0
+          priority=1
+      yum repolist
+      ```
 
-  ```shell
-  # 集群机子
-  # 逻辑卷管理：PV VG LV 增删扩缩
-  lsblk
-  pvcreate /dev/sdb # 将物理磁盘初始化为物理卷 PV
-  vgcreate ceph /dev/sdb # 创建卷组 VG，并将 PV 加入 VG
-  lvcreate -n osd -L 10G ceph # 基于卷组 VG 创建逻辑卷 LV
-  mkfs.xfs /dev/ceph/osd # 格式化
-  mount /dev/ceph/osd /mnt # 挂载
-  df -h
-  ```
+    + 磁盘分区
 
+      ```shell
+      # 集群机子
+      # 逻辑卷管理：PV VG LV 增删扩缩
+      lsblk
+      pvcreate /dev/sdb # 将物理磁盘初始化为物理卷 PV
+      vgcreate ceph /dev/sdb # 创建卷组 VG，并将 PV 加入 VG
+      lvcreate -n osd -L 10G ceph # 基于卷组 VG 创建逻辑卷 LV
+      mkfs.xfs /dev/ceph/osd # 格式化
+      mount /dev/ceph/osd /mnt # 挂载
+      df -h
 
+      pvcreate pvremove
+      vgcreate vgremove vgextend vgreduce
+      lvcreate lvremove
+      ```
 
-#### 1.2 管理机安装ceph-ansible
++ 配置ceph-ansible
 
-+ 安装 Ansible
+    + 安装 Ansible
 
-  ``` shell
-  yum -y install ansible
-  ```
+      ``` shell
+      yum -y install ansible
+      ```
 
-+ 安装 Ceph-Ansible
+    + 安装 Ceph-Ansible
 
-  ```shel
-  git clone -b stable-4.0 https://github.com/ceph/ceph-ansible.git --recursive
-  ```
+      ```shel
+      git clone -b stable-4.0 https://github.com/ceph/ceph-ansible.git --recursive
+      ```
 
-+ 解决环境依赖
+    + 解决环境依赖
 
-  ```shell
-  # 管理机
-  yum install -y python-pip
-  pip install pip==19.3.1
-  pip install -r ceph-ansible/requirements.txt  # ansible netaddr
-  ```
+      ```shell
+      # 管理机
+      yum install -y python-pip
+      pip install pip==19.3.1
+      pip install -r ceph-ansible/requirements.txt  # ansible netaddr
+      ```
 
-+ 修改ansible配置文件
+    + 修改ansible配置文件
 
-  ```shell
-  vi /etc/ansible/hosts
-  # 配置Ceph集群节点地址以及机子角色
-  [all:vars]
-  ansible_ssh_port=22
-  ansible_ssh_user="root"
-  ansible_ssh_pass=""
-  [mons]
-  192.168.88.179
-  192.168.88.180
-  192.168.88.181
-  [mgrs]
-  192.168.88.179
-  192.168.88.180
-  192.168.88.181
-  [osds]
-  192.168.88.179
-  192.168.88.180
-  192.168.88.181
-  
-  vi /etc/ansible/ansible.cfg
-  host_key_checking = False  # 跳过ssh第一次连接时输入yes
-  ```
+      ```shell
+      vi /etc/ansible/hosts
+      # 配置Ceph集群节点地址以及机子角色
+      [all:vars]
+      ansible_ssh_port=22
+      ansible_ssh_user="root"
+      ansible_ssh_pass=""
+      [mons]
+      192.168.88.179
+      192.168.88.180
+      192.168.88.181
+      [mgrs]
+      192.168.88.179
+      192.168.88.180
+      192.168.88.181
+      [osds]
+      192.168.88.179
+      192.168.88.180
+      192.168.88.181
 
-+ 修改ceph-ansible配置文件
+      vi /etc/ansible/ansible.cfg
+      host_key_checking = False  # 跳过ssh第一次连接时输入yes
+      ```
 
-  ```shell
-  cd ceph-ansible/group_vars/
-  
-  # 根据模板创建文件
-  cp mons.yml.sample mons.yml
-  cp mgrs.yml.sample mgrs.yml
-  cp osds.yml.sample osds.yml
-  cp all.yml.sample all.yml
-  
-  # 配置 all.yml
-      ---  
-      # 配置 Ceph 源
-      ceph_origin: repository
-      ceph_repository: community
-      # ceph_mirror: http://mirrors.aliyun.com/ceph
-      # ceph_stable_key: http://mirrors.aliyun.com/ceph/keys/release.asc
-      ceph_mirror: # 配置内部yum源
-      ceph_stable_release: nautilus
-      ceph_stable_repo: "{{ ceph_mirror }}/rpm-{{ ceph_stable_release }}"
-      # 集群网络配置
-      public_network: 10.190.180.0/22
-      cluster_network: 10.190.180.0/23    
-      # mon
-      monitor_interface: eth0
-      # osd
-      osd_objectstore: bluestore
-      # mgr
-      dashboard_enabled: false
-      # overrides
-      ceph_conf_overrides:
-        global:
-          osd_pool_default_pg_num: 64
-          osd_pool_default_pgp_num: 64
-          osd_pool_default_size: 1
-          #common_single_host_mode: true
-        mon:
-          mon_allow_pool_create: true
-  	ntp_daemon_type: ntpd
-  # 配置 osds.yml
-  # bluestore：data + metadata + wal
-      ---
-      lvm_volumes:
-        - data: osd-data
-          data_vg: ceph
-          wal: osd-wal
-          wal_vg: ceph
-          db: osd-meta
-          db_vg: ceph
-  
-  # 配置 site.yml
-  cd ceph-ansible
-  cp site.yml.sample site.yml
-  
-  # 注释掉不用的 hosts
-  # 注释掉 - import_playbook: dashboard.yml
-  ```
+    + 修改ceph-ansible配置文件
 
+      ```shell
+      cd ceph-ansible/group_vars/
 
+      # 根据模板创建文件
+      cp mons.yml.sample mons.yml
+      cp mgrs.yml.sample mgrs.yml
+      cp osds.yml.sample osds.yml
+      cp all.yml.sample all.yml
 
-#### 1.3 创建集群
+      # 配置 all.yml
+          ---  
+          # 配置 Ceph 源
+          ceph_origin: repository
+          ceph_repository: community
+          # ceph_mirror: http://mirrors.aliyun.com/ceph
+          # ceph_stable_key: http://mirrors.aliyun.com/ceph/keys/release.asc
+          ceph_mirror: # 配置内部yum源
+          ceph_stable_release: nautilus
+          ceph_stable_repo: "{{ ceph_mirror }}/rpm-{{ ceph_stable_release }}"
+          # 集群网络配置
+          public_network: 10.190.180.0/22
+          cluster_network: 10.190.180.0/23    
+          # mon
+          monitor_interface: eth0
+          # osd
+          osd_objectstore: bluestore
+          # mgr
+          dashboard_enabled: false
+          # overrides
+          ceph_conf_overrides:
+            global:
+              osd_pool_default_pg_num: 64
+              osd_pool_default_pgp_num: 64
+              osd_pool_default_size: 1
+              #common_single_host_mode: true
+            mon:
+              mon_allow_pool_create: true
+        ntp_daemon_type: ntpd
+      # 配置 osds.yml
+      # bluestore：data + metadata + wal
+          ---
+          lvm_volumes:
+            - data: osd-data
+              data_vg: ceph
+              wal: osd-wal
+              wal_vg: ceph
+              db: osd-meta
+              db_vg: ceph
+
+      # 配置 site.yml
+      cd ceph-ansible
+      cp site.yml.sample site.yml
+      ```
+
++ **运行playbook**
 
 ```shell
 ansible-playbook site.yml
@@ -193,17 +196,165 @@ ansible-playbook site.yml
 
 
 
+#### 1.2 手动部署
+
++ **安装**
+
+  ``` shell
+  yum install ceph-mon ceph-mgr ceph-dashboard ceph-osd -y
+  ```
+
++ **mon**
+
+  1. 创建配置文件 /etc/ceph/ceph.conf
+
+     ```yaml
+     [global]
+     fsid = 4c596c2c-69e3-47c0-a8b0-82ba499ea9ce   # uuid
+     mon initial members = node-1                  # hostname [root@node-1 ~]
+     mon host = 10.190.180.241                     # hostIP
+     public network = 10.190.180.0/23              # 管理网络
+     cluster network = 10.190.180.0/23             # 集群网络
+     auth cluster required = cephx
+     auth service required = cephx
+     auth client required = cephx
+     osd pool default size = 3
+     osd pool default min size = 2
+     osd pool default pg num = 64
+     osd pool default pgp num = 64
+     osd crush chooseleaf type = 0
+     ```
+
+  2. 配置集群 monmap 信息
+
+     ```shell
+     monmaptool --create --add node-1 10.190.180.241 --fsid 4c596c2c-69e3-47c0-a8b0-82ba499ea9ce /var/lib/ceph/tmp/monmap
+     ```
+
+  3. 配置集群的 client.admin 角色密钥环
+
+     ``` shell
+     sudo ceph-authtool --create-keyring /etc/ceph/ceph.client.admin.keyring --gen-key -n client.admin --cap mon 'allow *' --cap osd 'allow *' --cap mds 'allow *' --cap mgr 'allow *'
+     ```
+
+  4. 配置主机的 monitor 角色密钥环
+
+     ```shell
+     sudo ceph-authtool --create-keyring /var/lib/ceph/tmp/ceph.mon.keyring --gen-key -n mon. --cap mon 'allow *' 
+     sudo ceph-authtool /var/lib/ceph/tmp/ceph.mon.keyring --import-keyring /etc/ceph/ceph.client.admin.keyring
+     ```
+
+  5. 配置文件夹权限
+
+     ``` shell
+     chown ceph:ceph -R /var/lib/ceph/tmp/
+     ```
+
+  6. 初始化主机的monitor数据（生成 /var/lib/ceph/mon/ceph-node-1目录  {cluster}-{hostname}）
+
+     ```
+     ceph-mon --cluster ceph --mkfs -i node-1 --monmap /var/lib/ceph/tmp/monmap --keyring /var/lib/ceph/tmp/ceph.mon.keyring
+     ```
+
+  7. 配置文件夹权限
+
+     ```shell
+     chown ceph:ceph -R /var/lib/ceph/mon
+     ```
+
+  8. 启动 monitor 服务
+
+     ```shell
+     systemctl start ceph-mon@node-1
+     systemctl enable ceph-mon@node-1
+     ```
+
++ **mgr**
+
+  1. 创建主机的 mgr 目录
+
+     ``` shell
+     mkdir /var/lib/ceph/mgr/ceph-node-1    # {cluster}-{hostname}
+     ```
+
+  2. 创建集群的主机 mgr 用户，并生成密钥环放在指定目录
+
+     ``` shell
+     ceph auth get-or-create mgr.node-1 mon 'allow profile mgr' osd 'allow *' mds 'allow *' -o /var/lib/ceph/mgr/ceph-node-1/keyring
+     ```
+
+  3. 配置文件夹权限
+
+     ``` shell
+     chown ceph:ceph -R /var/lib/ceph/mgr
+     ```
+
+  4. 启动 mgr 服务
+
+     ```shell
+     systemctl start ceph-mgr@node-1
+     systemctl enable ceph-mgr@node-1
+     ```
+
+  5. 启动 mgr.dashboard 模块
+
+     ``` shell
+     ceph mgr module enable dashboard
+     ceph config set mgr mgr/dashboard/ssl true
+     ceph dashboard create-self-signed-cert
+     ceph config set mgr mgr/dashboard/server_addr 0.0.0.0  
+     ceph config set mgr mgr/dashboard/server_port 8080 
+     ceph config set mgr mgr/dashboard/ssl_server_port 8443 
+     ceph dashboard ac-user-create <username> -i <file-containing-password> administrator
+     ```
+
+  6. 启动 mgr.prometheus 模块
+
+     ``` shell
+     ceph mgr module enable prometheus
+     ceph config set mgr mgr/prometheus/server_addr 0.0.0.0
+     ceph config set mgr mgr/prometheus/server_port 9283
+     ```
+
+  7. 查看模块状态
+
+     ``` shell
+     [root@node-1 ~]# ceph mgr services
+     {
+         "dashboard": "https://node-1:8443/",
+         "prometheus": "http://node-1:9283/"
+     }
+     ```
+
++ **osd**
+
+    1. 拷贝集群的 /etc/ceph/ceph.conf  /etc/ceph/ceph.client.admin.keyring 到部署的主机上
+
+    2. 获取集群的 client.bootstrap-osd 密钥环，指定名称放到指定目录
+
+       ```shell
+       ceph auth get client.bootstrap-osd -o /var/lib/ceph/bootstrap-osd/ceph.keyring
+       ```
+
+    3. 挂载磁盘并启动 osd 服务
+
+       ```
+       ceph-volume lvm create --bluestore --data centos/data --block.wal centos/wal --block.db centos/meta
+       ```
+
+
+
 ### 2 Ceph命令操作
 
 > architecture：https://docs.ceph.com/en/latest/architecture/
+> 						  https://is-cloud.blog.csdn.net/article/details/89419873
 > cluster.operations：https://docs.ceph.com/en/latest/rados/operations/
+>                                         https://docs.ceph.com/en/latest/rados/man/
 
 ```shell
 ceph -s 
 ceph health detail
 ```
-
-
 
 #### 2.1 用户权限
 
@@ -211,7 +362,30 @@ ceph health detail
 > https://is-cloud.blog.csdn.net/article/details/89679912 
 > ceph client 包括 rbd / radosgw / cephfs / cli-rest-api 等
 
-+ ceph auth
++ 身份认证原理：**共享密钥**
+
+  <img src="pictures/image-20210304195854979.png" alt="image-20210304195854979" style="zoom:90%;" />
+
+  > 1. 用户通过客户端向 MON 发起请求。
+  > 2. 客户端将**用户名**传递到 MON。
+  > 3. MON 对用户名进行检查，若用户存在，则通过加密用户密钥生成一个 session key 并返回客户端。
+  > 4. 客户端通过共享密钥解密 session key，只有**拥有相同用户密钥环文件的客户端**可以完成解密。
+  > 5. 客户端得到 session key 后，客户端持有 session key 再次向 MON 发起请求
+  > 6. MON 生成一个 ticket，同样使用用户密钥进行加密，然后发送给客户端。
+  > 7. 客户端同样通过共享密钥解密得到 ticket。
+  > 8. 往后，客户端持有 ticket 向 MON、OSD 发起请求。
+
+  **故：**只要客户端拥有任意用户的密钥环文件，客户端就可以执行特定用户所具有权限的所有操作
+
++ ceph -s
+
+  ```shell
+  # 实际上执行的是
+  ceph -s --conf /etc/ceph/ceph.conf --name client.admin --keyring /etc/ceph/ceph.client.admin.keyring
+  # 默认使用client.admin用户，并使用默认路径下密钥环
+  ```
+  
++ ceph auth  用户管理
 
   ```shell
   ceph auth ls  # 所有用户信息
@@ -235,12 +409,12 @@ ceph health detail
   # Gives a user permissions to bootstrap an OSD. Conferred on deployment tools such as ceph-volume, cephadm, etc. so that they have permissions to add keys, etc. when bootstrapping an OSD.
   ```
 
-+ ceph-authtool
++ ceph-authtool 密钥环文件管理
 
   > https://docs.ceph.com/en/latest/man/8/ceph-authtool/
 
   ```shell
-  ceph-authtool -n client.l --gen-key --cap osd 'allow rwx' --cap mon 'allow rwx' --create-keyring /etc/ceph/client.l.keyring  # 创建用户并授权并生成密钥环
+  ceph-authtool -n client.l --gen-key --cap osd 'allow rwx' --cap mon 'allow rwx' --create-keyring /etc/ceph/client.l.keyring  # 生成用户密钥环文件
   ceph auth import -i /etc/ceph/client.l.keyring # 从密钥环文件导入用户到集群
   ceph auth get client.admin -o /etc/ceph/ceph.client.admin.keyring # 将用户导出到密钥环
   ceph -n client.admin --keyring=/etc/ceph/ceph.client.admin.keyring health # 指定密钥环用户来操作
@@ -250,28 +424,6 @@ ceph health detail
 
 #### 2.2 MON
 
-+ 新增 mon
-
-  ```shell
-  # 1. 拷贝原集群 ceph.conf，在其基础上添加 mon 节点 node-2 信息
-  [global]
-  fsid = ac0231f0-2a1f-4b83-9aee-081fe1068851
-  mon initial members = node-1,node-2
-  mon host = 10.190.180.241,10.190.180.242
-  # 2. 根据配置好的 ceph.conf，手动创建 monmap
-  monmaptool --create --clobber --fsid ac0231f0-2a1f-4b83-9aee-081fe1068851 --add node-1 10.190.180.241 --add node-2 10.190.180.242 /tmp/monmap
-  # 如果是修复 mon，可直接在原可用集群 ceph mon getmap -o /tmp/monmap
-  # 3. 从原可用集群上获取 client.admin 角色密钥环
-  ceph auth get client.admin -o /etc/ceph/ceph.client.admin.keyring
-  # 4. 初始化数据文件
-  ceph-mon -i node-1 --mkfs --monmap /tmp/monmap --keyring /etc/ceph/ceph.mon.keyring -c /etc/ceph/ceph.conf
-  # 5. 配置标志位文件
-  touch /var/lib/ceph/mon/ceph-node-2/done
-  # 6. 启动 mon 服务
-  systemctl start ceph-mon@node-2
-  systemctl enable ceph-mon.target
-  ```
-  
 + monmaptool 工具 
 
   ```shell
@@ -291,20 +443,6 @@ ceph health detail
 
 #### 2.3 OSD
 
-+ 新增 osd
-
-  ```shell
-  # bluestore: db + meta + wal
-  # create 版
-  ceph-volume lvm create --bluestore --data {dev or vg/lv} --block.wal {} --block.db {} 
-  # if block device, a logical volume will be created
-  
-  # 等同于 prepare + activate
-  ceph-volume lvm prepare --bluestore --data {dev or vg/lv} --block.wal {} --block.db {} 
-  ceph-volume lvm list
-  ceph-volume lvm activate {ID} {FSID}
-  ```
-
 + ceph-volume
 
   > https://docs.ceph.com/en/nautilus/man/8/ceph-volume/
@@ -315,47 +453,31 @@ ceph health detail
   ceph-volume [-h] [–cluster CLUSTER] [–log-level LOG_LEVEL] [–log-path LOG_PATH]
   ceph-volume inventory
   ```
+  
+  ```shell
+  # bluestore: db + meta + wal
+  # create 版
+  ceph-volume lvm create --bluestore --data {dev or vg/lv} --block.wal {} --block.db {}
+  # if block device, a logical volume will be created
+  
+  # 等同于 prepare + activate
+  ceph-volume lvm prepare --bluestore --data {dev or vg/lv} --block.wal {} --block.db {} 
+  ceph-volume lvm list
+  ceph-volume lvm activate {ID} {FSID}
+  ```
+  
++ ceph osd
 
+  > https://blog.csdn.net/mpu_nice/article/details/106354561
 
+  ``` java
+  ceph osd [ blocklist | blocked-by | create | new | deep-scrub | df | down | dump | erasure-code-profile | find | getcrushmap | getmap | getmaxosd | in | ls | lspools | map | metadata | ok-to-stop | out | pause | perf | pg-temp | force-create-pg | primary-affinity | primary-temp | repair | reweight | reweight-by-pg | rm | destroy | purge | safe-to-destroy | scrub | set | setcrushmap | setmaxosd | stat | tree | unpause | unset ] …
+  ```
+
+  
 
 #### 2.4 MGR
 
-+ 新增 mgr
-
-  ```shell
-  # 1. 创建集群用户，并生成密钥环放在指定目录
-  ceph auth get-or-create mgr.node-1 mon 'allow profile mgr' osd 'allow *' mds 'allow *' -o /var/lib/ceph/mgr/ceph-node-1/keyring
-  # 2. 启动 mgr 服务
-  systemctl start ceph-mgr@node-1
-  ```
-
-+ 开启 dashboard 模块
-
-  ``` shell
-  # 1. 安装包
-  yum install ceph-mgr-dashboard
-  # 2. 启动模块
-  ceph mgr module enable dashboard
-  # 3. 配置
-  ceph config set mgr mgr/dashboard/ssl true  # 默认 true
-  ceph dashboard create-self-signed-cert
-  ceph config set mgr mgr/dashboard/server_addr 0.0.0.0
-  ceph config set mgr mgr/dashboard/server_port 8080  # 默认 
-  ceph config set mgr mgr/dashboard/ssl_server_port 8843 # 默认
-  ceph dashboard ac-user-create root 123456 administrator
-  
-  ceph mgr module ls # "dashboard": "https://node-1:8443/"
-  ```
-
-+ 开启 prometheus 模块
-
-  ``` shell
-  ceph mgr module enable prometheus
-  ceph config set mgr mgr/prometheus/server_addr 0.0.0.0  # 默认
-  ceph config set mgr mgr/prometheus/server_port 9283  # 默认
-  
-  ceph mgr module ls # "prometheus": "http://node-1:9283/"
-  ```
 
 
 
@@ -379,7 +501,7 @@ ceph health detail
   > https://docs.ceph.com/en/latest/rbd/rados-rbd-cmds/#basic-block-device-commands
 
   ```shell
-  rbd create --size {megabytes} [–image-feature feature-name] {pool-name}/{image-name}
+  rbd create --size {megabytes} [--image-feature feature-name (layering)] {pool-name}/{image-name}
   rbd ls {poolname}
   rbd info {pool-name}/{image-name}
   ```
@@ -450,6 +572,14 @@ ceph health detail
 
 
 
+#### 2.6 Crush Map
+
+> https://blog.csdn.net/weillee9000/article/details/102842642
+
+
+
+
+
 ### 3 Ceph基础知识
 
 
@@ -508,7 +638,7 @@ ceph health detail
 + **File：**用户需要存储或访问的文件
 + **Objects：**RADOS基本存储单元，即对象，由File进行切分（ID / Binary Data / Metadata）
 + **PG(Placement Group)：**一个PG包含Objects，整个PG映射到多个OSD上（一主多从）。是实现上的逻辑概念，物理上不存在。PG数量固定，不会随着OSD动态伸缩。
-+ **PGP：**相当于PG存放的OSD副本排列组合。假设PG映射到3个osd，即osd1，osd2，osd3，副本数为2，如果pgp=1，那么pg存放的副本osd的组合就有一种，比如（osd1, osd2）
++ **PGP：**PG分裂（手动增加数量）后，为避免新增的PG在OSD之间迁移，故引入PGP记录之前PG个数，让原先的PG保持之前的分布
 + **Pool**：对多个PG设置相同的Namespace，定义成逻辑概念上的Pool，可以对不同的业务场景做隔离（pool size 即 PG 映射到 size 个 osd）
 + **OSDs：**每一块物理硬盘对应一个osd进程。每个OSD上分布多个PG，每个PG会自动散落在不同OSD上。如果扩容OSD，那么相应的PG会进行迁移到新的OSD上，保证每个OSD上的PG数量均衡
 + **Bucket：**C-RUSH算法树的中间节点（区别于rgw对象存储中的bucket）

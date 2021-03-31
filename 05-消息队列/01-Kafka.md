@@ -8,7 +8,7 @@
 
 ### Kafka 架构
 
-<img src="E:\projects\grocery\qiuhonglong\05-消息队列\pictures\image-20201127160901921.png" alt="image-20201127160901921" style="zoom:50%;" />
+<img src="pictures\image-20201127160901921.png" alt="image-20201127160901921" style="zoom:50%;" />
 
 + **Producer **：生产者
 
@@ -41,9 +41,9 @@
   + **Sender**：发送器，负责读取收集器缓存的**批量信息**，交由 Selector 进行网络传输
   + **Selector**：选择器，处理**网络连接**和**数据读写**处理
 
-  <img src="E:\projects\grocery\qiuhonglong\05-消息队列\pictures\image-20201127163859254.png" alt="image-20201127163859254" style="zoom:70%;" />
+  <img src="pictures\image-20201127163859254.png" alt="image-20201127163859254" style="zoom:70%;" />
 
-  <img src="E:\projects\grocery\qiuhonglong\05-消息队列\pictures\image-20201201200920315.png" alt="image-20201201200920315" style="zoom:50%;" />
+  <img src="pictures\image-20201201200920315.png" alt="image-20201201200920315" style="zoom:50%;" />
 
   > 1. 创建消息，Topic Value 必填，Key Partition 选填
   > 2. Seriallizer：对key value **序列化** 为二进制（网络传输格式要求）
@@ -80,7 +80,7 @@
 
 > Consumer / Group 结合可实现 **单播 和 广播**
 
-<img src="E:\projects\grocery\qiuhonglong\05-消息队列\pictures\image-20201127170453911.png" alt="image-20201127170453911" style="zoom:70%;" />
+<img src="pictures\image-20201127170453911.png" alt="image-20201127170453911" style="zoom:70%;" />
 
 > 1. 消费者客户端根据配置创建连接器
 >
@@ -88,7 +88,7 @@
 >
 > 3. **消费进程**轮询队列信息，进行业务逻辑消费
 
-<img src="E:\projects\grocery\qiuhonglong\05-消息队列\pictures\image-20201201204341802.png" alt="image-20201201204341802" style="zoom: 67%;" />
+<img src="pictures\image-20201201204341802.png" alt="image-20201201204341802" style="zoom: 67%;" />
 
 
 
@@ -98,7 +98,7 @@
 
   + **同个Group中建立多个Consumer，消息获取和消息处理耦合**
 
-    <img src="E:\projects\grocery\qiuhonglong\05-消息队列\pictures\image-20201130102545260.png" alt="image-20201130102545260" style="zoom:80%;" />
+    <img src="pictures\image-20201130102545260.png" alt="image-20201130102545260" style="zoom:80%;" />
   
     ```java
     public class Consumer1 implements Runnable {
@@ -113,7 +113,7 @@
 
   + **单个Consumer，多个Worker，消息获取和消息处理解耦（即 Reactor模型 = IO多路复用 + 事件驱动）**
 
-    <img src="E:\projects\grocery\qiuhonglong\05-消息队列\pictures\image-20201130174408275.png" alt="image-20201130174408275" style="zoom:80%;" />
+    <img src="pictures\image-20201130174408275.png" alt="image-20201130174408275" style="zoom:80%;" />
   
     ```java
     private final KafkaConsumer<String, String> consumer;
@@ -180,13 +180,13 @@
     >
     > 正好一次：拉取 【更新  处理】 (原子，prepare commit 事务)
 
-  <img src="E:\projects\grocery\qiuhonglong\05-消息队列\pictures\image-20201201204135402.png" alt="image-20201201204135402" style="zoom:100%;" />
+  <img src="pictures\image-20201201204135402.png" alt="image-20201201204135402" style="zoom:100%;" />
 
 ### 消息物理存储形式
 
 + **Partition  Replica  Log  LogSegment**
 
-  <img src="E:\projects\grocery\qiuhonglong\05-消息队列\pictures\image-20201202193647382.png" alt="image-20201202193647382" style="zoom:90%;" />
+  <img src="pictures\image-20201202193647382.png" alt="image-20201202193647382" style="zoom:90%;" />
 
   > 如图 topic 划分成3个 partition，数据分布在不同的主机上（分片提高性能）；同时，每个 partition 有主从副本，两者**需分布在不同**的主机上，不能同时宕机（副本提高可用性）。 
   >
@@ -208,7 +208,7 @@
   | --topic2-p1
   ```
 
-  <img src="E:\projects\grocery\qiuhonglong\05-消息队列\pictures\image-20201202195520785.png" alt="image-20201202195520785" style="zoom:100%;" />
+  <img src="pictures\image-20201202195520785.png" alt="image-20201202195520785" style="zoom:100%;" />
 
   > 以 <3, 497> 为例，3 代表 数据文件中 第3个 消息（**个数偏移**），全局上第 368769 + 3 = 368772 个消息（**offset**）；497 代表 消息在文件中的**物理地址偏移**
 
@@ -222,7 +222,7 @@
   >
   > 主节点应负载均衡散落在各个 Broker 上 **（高性能）** 
 
-  <img src="E:\projects\grocery\qiuhonglong\05-消息队列\pictures\image-20201203194520982.png" alt="image-20201203194520982" style="zoom:67%;" />
+  <img src="pictures\image-20201203194520982.png" alt="image-20201203194520982" style="zoom:67%;" />
 
   
 
@@ -234,7 +234,7 @@
   >
   > Zookeeper 利用 **临时** 特性进行选主。节点谁先写入谁是 Leader；Leader 宕机则删除目录，节点重新竞争。
 
-  <img src="E:\projects\grocery\qiuhonglong\05-消息队列\pictures\image-20201203192226471.png" alt="image-20201203192226471" style="zoom:80%;" />
+  <img src="pictures\image-20201203192226471.png" alt="image-20201203192226471" style="zoom:80%;" />
 
   > Zookeeper 是 **CP**，用在对 **数据一致性要求高** 的场景，不能保证每次服务请求的可用性。
   >
@@ -262,7 +262,7 @@
 >
 > 其次，由于消费者拉取消息后会多线程处理，故消息应再次打入同一个 Queue（可根据 key）,每个线程消费一个Queue。
 
-<img src="E:\projects\grocery\qiuhonglong\05-消息队列\pictures\image-20201203203137547.png" alt="image-20201203203137547" style="zoom:90%;" />
+<img src="pictures\image-20201203203137547.png" alt="image-20201203203137547" style="zoom:90%;" />
 
 
 
