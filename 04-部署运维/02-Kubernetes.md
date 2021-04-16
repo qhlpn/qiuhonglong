@@ -32,7 +32,7 @@
     - 提供容器弹性，如果容器失效就替换它，等等
 ```
 
-##### **Master **
+##### **Master**
 
 ```
 - Master 是集群控制平台（Control Plane），负责协调集群中的所有活动，例如调度应用程序，维护应用程序的状态，扩展和更新应用程序。
@@ -51,7 +51,7 @@
             - service controller
 ```
 
-##### **Worker/Node **  
+##### **Worker/Node**  
 
 ``` 
 - 节点是虚拟机或物理计算机，充当k8s集群中的工作计算机。（外网IP）
@@ -728,7 +728,7 @@ Service 是 K8S 的服务发现机制，解决 Deployment 管理的 Pod IP 动�
     请求流量发送到Service[ip:targetPort]后，由iptables捕获（内核态操作）并重定向到kube-proxy开启的代理端口，最终流量由kube-proxy负载（用户态操作）到后端Pods
     ```
 
-  + **iptables 【默认】 **
+  + **iptables 【默认】**
 
     ```
     请求流量发送到service[ip:targetPort]后，由iptables捕获并直接负载到后端Pods（均在内核态操作），而kube-proxy只负责生成iptables规则

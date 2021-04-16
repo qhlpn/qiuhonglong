@@ -100,16 +100,16 @@
 
     <img src="pictures\image-20201130102545260.png" alt="image-20201130102545260" style="zoom:80%;" />
   
-    ```java
-    public class Consumer1 implements Runnable {
-        private final KafkaConsumer consumer = ;
-        public void run() {
-            consumer.subscribe(Arrays.asList("topic"));
-        }
-    }
-    executors.submit(consumer1);
+  ```java
+  public class Consumer1 implements Runnable {
+      private final KafkaConsumer consumer = ;
+      public void run() {
+          consumer.subscribe(Arrays.asList("topic"));
+      }
+  }
+  executors.submit(consumer1);
   ...
-    ```
+  ```
 
   + **单个Consumer，多个Worker，消息获取和消息处理解耦（即 Reactor模型 = IO多路复用 + 事件驱动）**
 
@@ -160,7 +160,7 @@
     
     + **RangePartitionAssignor 默认 等分连续区间**
     + **RoundRobinAssignor 轮询分配**
-    + **AbstractPartitionAssignor 自定义 **（手动控制主题级别的消息有序）
+    + **AbstractPartitionAssignor 自定义 ** （手动控制主题级别的消息有序）
   
 + **Zookeeper**
 
@@ -214,7 +214,7 @@
 
 ### Kafka 集群（高可用 高性能）
 
-+ **Partition 负载均衡 + 副本冗余 **
++ **Partition 负载均衡 + 副本冗余 ** 
 
   > Partition 分为主从，其中 Leader  负责**读写**，Preferred **只**负责同步冗余  **（高可用，前期不支持读写分离，高版本支持）** 
   >

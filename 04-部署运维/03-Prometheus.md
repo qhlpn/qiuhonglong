@@ -30,7 +30,7 @@
 
 + **样本数据**
 
-  > Promtheus 将采集到的 **样本数据** 以 **时间序列（time-series）**方式保存在内存数据库中，定期持久化到硬盘。
+  > Promtheus 将采集到的 **样本数据** 以 **时间序列（time-series）** 方式保存在内存数据库中，定期持久化到硬盘。
   > 每条 time-series 通过 **指标名** 和 **标签值** 命名
 
   ```
@@ -270,15 +270,11 @@ scrape_configs:
                    # 两个exporter进程均采集本机10.190.180.241.linux指标
           labels:
           instance: '10.190.180.241.linux'
-  ```
   
-  ```yaml
-up{job="<job-name>", instance="<instance-id>"}: 如果实例运行状况良好（即可达）为1，或者如果抓取失败则为0
+  up{job="<job-name>", instance="<instance-id>"}: 如果实例运行状况良好（即可达）为1，或者如果抓取失败则为0
   ```
 
   > 如果在抓取的数据中已经存在这些标签中的任何一个，则行为取决于honor_labels配置选项
-  
-  
 
 ### Alertmanager
 
