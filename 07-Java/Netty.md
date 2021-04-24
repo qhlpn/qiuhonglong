@@ -44,7 +44,7 @@ buffer 属性：**capacity、position、limit**
 
 1. 向 buffer 写入数据，例如调用 channel.read(buffer)
 
-2. 调用 **flip()** 切换至 **读模式**
+2. 🔥读 buffer 前调用 **flip()** 切换至 **读模式**
 
 3. 从 buffer 读取数据，buffer.get() 改变 position，buffer.get(i) 不变
 
