@@ -187,6 +187,12 @@
       cd ceph-ansible
       cp site.yml.sample site.yml
       ```
+      
+    + ansible ssh 免密登录
+
+      ```
+      http://www.linuxboy.net/ansiblejc/144350.html
+      ```
 
 + **运行playbook**
 

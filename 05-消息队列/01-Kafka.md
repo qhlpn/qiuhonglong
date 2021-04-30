@@ -94,9 +94,9 @@
 
 + **多线程消费 方案**
 
-  > **Java Consumer** 是 **线程不安全** 的，多线程时需要对数据访问进行隔离
+  > **KafkaConsumer** 是 **线程不安全** 的（多个线程共享同个consumer，同时进行consumer.poll，会有数据问题）
 
-  + **同个Group中建立多个Consumer，消息获取和消息处理耦合**
+  + **同个Group中建立多个Consumer，不同线程对应不同的Consumer，进行消息获取和消息处理**
 
     <img src="pictures\image-20201130102545260.png" alt="image-20201130102545260" style="zoom:80%;" />
   
@@ -111,10 +111,11 @@
   ...
   ```
 
-  + **单个Consumer，多个Worker，消息获取和消息处理解耦（即 Reactor模型 = IO多路复用 + 事件驱动）**
-
-    <img src="pictures\image-20201130174408275.png" alt="image-20201130174408275" style="zoom:80%;" />
-  
+  + **消息接收由单个线程跑单个Consumer；消息处理由不同的线程分别对应不同的Worker。**
+**消息接收和消息处理解耦，即 Reactor模型 = IO多路复用 + 事件驱动**
+    
+  <img src="pictures\image-20201130174408275.png" alt="image-20201130174408275" style="zoom:80%;" />
+    
     ```java
     private final KafkaConsumer<String, String> consumer;
     private ExecutorService executors;
