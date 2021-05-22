@@ -113,7 +113,7 @@ GET /index/type(_doc)/_search
 2. **match_phrase**
 
    ```
-   # match_phrase: 类似 match, 但 q	uery 分词结果必须在被检索字段的分词中都包含，且顺序必须相同
+   # match_phrase: 类似 match, 但 query 分词结果必须在被检索字段的分词中都包含，且顺序必须相同
    GET /tehero_index/_doc/_search
    {
        "query": {

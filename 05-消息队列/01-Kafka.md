@@ -114,8 +114,9 @@
   + **消息接收由单个线程跑单个Consumer；消息处理由不同的线程分别对应不同的Worker。**
 **消息接收和消息处理解耦，即 Reactor模型 = IO多路复用 + 事件驱动**
     
+  
   <img src="pictures\image-20201130174408275.png" alt="image-20201130174408275" style="zoom:80%;" />
-    
+  
     ```java
     private final KafkaConsumer<String, String> consumer;
     private ExecutorService executors;
@@ -253,7 +254,7 @@
 
   + **业务操作** 可以在重复消费情况下实现正好一次
 
-    > 比如 MySQL唯一键插入报错、Redis集合Set天然幂等、生成uuid做记录消费时比对
+    > 比如 MySQL唯一键插入报错、Redis集合Set天然幂等、生成uuid做记录，消费时比对
 
 
 
