@@ -28,11 +28,24 @@ SelectionKey 对 Channel : 1 对 1
 
 <img src="pictures/image-20210519205153117.png" alt="image-20210519205153117" style="zoom:67%;" />
 
+**selector.select()** 何时不阻塞：
+
+1. 事件发生时
+2. 调用 selector.wakeup()
+3. 调用 selector.close()
+4. selector.select() 所在线程 interrupt 时
+
+
+
+
+
 ##### Buffer
 
 buffer 是 io 缓冲区，用来缓冲读写数据（**优化组件**）。常见的 Buffer 有：Byte Short Int Long Float Double Char ... 
 
 buffer 是 **非线程安全的**
+
+**DirectByteBuf  零拷贝**
 
 buffer 属性：**capacity、position、limit**
 
@@ -195,9 +208,9 @@ public class Server {
 
    <img src="pictures/image-20210519205527920.png" alt="image-20210519205527920" style="zoom:80%;" />
 
-   + 思路一：固定足够大的消息长度，服务器按预定长度读取，缺点是浪费带宽
-   + 思路二：是按分隔符拆分，缺点是效率低
-   + 思路三：TLV 格式，即 Type 类型、Length 长度、Value 数据。在类型和长度已知的情况下，即可分配大小合适的 Buffer
+   + 思路一：**固定足够大的消息长度**，服务器按预定长度读取，缺点是浪费带宽
+   + 思路二：**按分隔符拆分**，缺点是效率低
+   + 思路三：**TLV 格式**，即 Type 类型、Length 长度、Value 数据。在类型和长度已知的情况下，即可分配大小合适的 Buffer
 
 
 
@@ -254,3 +267,163 @@ public class Server {
 }
 ```
 
+**注意：由于可能无法一次性全部写入buffer**
+
++ 非阻塞模式下，无法保证把 buffer 中所有数据都写入 channel，**因此需要追踪 write 方法的返回值（代表实际写入字节数）**
++ 用 selector 监听所有 channel 的可写事件，每个 channel 都需要一个 key 来跟踪 buffer**【sckey.attach(buffer)】**，但这样又会导致占用内存过多，因此使用 **二阶段策略**：当消息处理器**第一次写入消息时**，才将 channel 注册到 selector 上；selector 检查 channel 上的可写事件，**如果所有的数据写完了**，就取消 channel 的注册（如果不取消，每次缓冲区可写时，均会触发 write 事件，故应当只在缓冲区 **写不下时** 再关注可写事件）
+
+
+
+##### 单 Reactor 多线程模式
+
+``` java
+class BossEventLoop implements Runnable {
+
+    private Selector selector;
+    private WorkerEventLoop[] workers;
+    private volatile boolean start = false;
+    private AtomicInteger index = new AtomicInteger();
+
+    public void register() throws IOException {
+        if (!start) {
+            ServerSocketChannel ssc = ServerSocketChannel.open();
+            ssc.bind(new InetSocketAddress(8888));
+            ssc.configureBlocking(false);
+            selector = Selector.open();
+            log.info("boss selector is {}", selector.toString());
+            SelectionKey sscKey = ssc.register(selector, SelectionKey.OP_ACCEPT, null);
+            this.workers = initWorkers();
+            new Thread(this, "boss").start();
+            log.info("boss start ....");
+            start = true;
+        }
+    }
+
+    private WorkerEventLoop[] initWorkers() {
+        WorkerEventLoop[] eventLoops = new WorkerEventLoop[Runtime.getRuntime().availableProcessors()];
+        log.debug("available processors cnt: {}", Runtime.getRuntime().availableProcessors());
+        for (int i = 0; i < eventLoops.length; i++) {
+            eventLoops[i] = new WorkerEventLoop(i);
+        }
+        return eventLoops;
+    }
+
+    @Override
+    public void run() {
+        while (true) {
+            try {
+                int cnt = selector.select();
+                log.info("boss selectedkey cnt : {}", cnt);
+                Iterator<SelectionKey> iter = selector.selectedKeys().iterator();
+                while (iter.hasNext()) {
+                    SelectionKey key = iter.next();
+                    iter.remove();
+                    if (key.isAcceptable()) {
+                        ServerSocketChannel ssc = (ServerSocketChannel) key.channel();
+                        SocketChannel sc = ssc.accept();
+                        sc.configureBlocking(false);
+                        log.debug("{} connected", sc.getRemoteAddress());
+                        workers[index.getAndIncrement() % workers.length].register(sc);
+                    }
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+
+    }
+}
+
+class WorkerEventLoop implements Runnable {
+
+    private Selector selector;
+    private volatile boolean start = false;
+    private int index;
+
+    public WorkerEventLoop(int index) {
+        this.index = index;
+    }
+
+    public void register(SocketChannel sc) throws IOException {
+        if (!start) {
+            selector = Selector.open();
+            log.info("worker-{} selector is {}", index, selector.toString());
+            new Thread(this, "worker-" + index).start();
+            log.info("worker-{} start ....", index);
+            start = true;
+        }
+        try {
+            // 防止 selector.select 阻塞时，sc.register(selector, SelectionKey.OP_READ, null) 失败
+            selector.wakeup();
+            sc.register(selector, SelectionKey.OP_READ, null);
+            int cnt = selector.selectNow();
+            log.info("worker-{} selectNow selectedkey cnt : {}", index, cnt);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    @Override
+    public void run() {
+        while (true) {
+            try {
+                int cnt = selector.select();
+                log.info("worker-{} select selectedkey cnt : {}", index, cnt);
+                Iterator<SelectionKey> iter = selector.selectedKeys().iterator();
+                while (iter.hasNext()) {
+                    SelectionKey key = iter.next();
+                    iter.remove();
+                    if (key.isReadable()) {
+                        SocketChannel sc = (SocketChannel) key.channel();
+                        ByteBuffer buffer = ByteBuffer.allocate(1024);
+                        int read = sc.read(buffer);
+                        try {
+                            if (read == -1) {
+                                key.cancel();
+                                sc.close();
+                            } else {
+                                log.info("{} message: ", sc.getRemoteAddress());
+                                System.out.println(byteBufferToString(buffer));
+                            }
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                            key.cancel();
+                            sc.close();
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+}
+
+
+class Client {
+    public static void main(String[] args) {
+        try {
+            SocketChannel sc = SocketChannel.open();
+            ByteBuffer source = ByteBuffer.allocate(32);
+            sc.connect(new InetSocketAddress("localhost", 8888));
+            source.put("flip before read\n".getBytes());
+            source.flip();
+            sc.write(source);
+            source.clear();
+            source.put("hello world\n".getBytes());
+            source.flip();
+            sc.write(source);
+            sc.write(Charset.defaultCharset().encode("hello world\n"));
+            sc.write(Charset.defaultCharset().encode("so slow\n"));
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}
+```
+
+**注意：**
+
++ ServerSocketChannel.open()、Selector.open() 并 **不是单例模式**
++ selector 阻塞时对其 register 会报错，需要 **select.wakeup()** 使其此次 select 不阻塞
