@@ -500,6 +500,7 @@ ceph health detail
   ceph osd lspools
   ceph osd pool get poolName pg_num    
   ceph osd pool set poolName pg_num 128
+  ceph osd pool delete {pool-name} [{pool-name} --yes-i-really-really-mean-it]
   ```
 
 + 创建RBD块
@@ -510,6 +511,7 @@ ceph health detail
   rbd create --size {megabytes} [--image-feature feature-name (layering)] {pool-name}/{image-name}
   rbd ls {poolname}
   rbd info {pool-name}/{image-name}
+  rbd rm {pool-name}/{image-name}
   ```
 
 + 映射RBD块到磁盘

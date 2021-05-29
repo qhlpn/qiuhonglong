@@ -318,7 +318,7 @@ GET /index/type(_doc)/_search
 
 #### Bool query 
 
-> ​		Bool query 子句只支持 只支持 text queries 、 term-level queries  和 bool query
+> Bool query 子句只支持 只支持 text queries 、 term-level queries  和 bool query
 
 **ES 两种上下文**
 
@@ -332,6 +332,38 @@ GET /index/type(_doc)/_search
 2. **must_not** 不得出现  not
 3. **must** 必须出现  and
 4. **should ** 应该出现  or
+
+```
+GET /blogs_index/_search
+{
+    "query": {
+        "bool": {
+            "filter": [
+                {
+                    "term": {
+                        "author": "金庸"
+                    }
+                },
+                {
+                    "term": {
+                        "tag": "武侠"
+                    }
+                },
+                {
+                    "match": {
+                        "title": "ES"
+                    }
+                }
+            ]
+        }
+    }
+}
+检索逻辑是：author = “金庸” and tag = "武侠"  and title 包含“ES”。
+```
+
+
+
+
 
 
 

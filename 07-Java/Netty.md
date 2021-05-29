@@ -427,3 +427,13 @@ class Client {
 
 + ServerSocketChannel.open()、Selector.open() 并 **不是单例模式**
 + selector 阻塞时对其 register 会报错，需要 **select.wakeup()** 使其此次 select 不阻塞
+
+
+
+### Netty
+
+<img src="pictures/image-20210526203224405.png" alt="image-20210526203224405" style="zoom: 60%;" />
+
+
+
+<img src="pictures/image-20210526203301316.png" alt="image-20210526203301316" style="zoom: 50%;" />
