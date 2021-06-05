@@ -274,7 +274,11 @@ public class Server {
 
 
 
-##### 单 Reactor 多线程模式
+##### 单 Reactor 多线程模型
+
+<img src="pictures/image-20210602190526990.png" alt="image-20210602190526990" style="zoom: 80%;" />
+
+
 
 ``` java
 class BossEventLoop implements Runnable {
@@ -432,8 +436,107 @@ class Client {
 
 ### Netty
 
+#### 1. 基本架构
+
+##### 多 Reactor 多线程模型
+
 <img src="pictures/image-20210526203224405.png" alt="image-20210526203224405" style="zoom: 60%;" />
 
 
 
-<img src="pictures/image-20210526203301316.png" alt="image-20210526203301316" style="zoom: 50%;" />
+#### 2.基本组件
+
+##### EventLoop
+
+EventLoop 本质是 **一个线程 + 执行器（submit）**，维护了一个 Selector，里面有 run 方法处理 Channel 上源源不断的 io 事件，以及其它提交的普通任务。
+
+EventLoopGroup 是一组 EventLoop，Channel 一般会调用 EventLoopGroup 的 register 方法来**绑定** 其中一个 EventLoop（负载均衡），**后续这个 Channel 上的 io 事件都由此 EventLoop 来处理**（保证了 io 事件处理时的线程安全）
+
+```java
+// 内部创建了两个 EventLoop, 每个 EventLoop 维护一个线程
+DefaultEventLoopGroup group = new DefaultEventLoopGroup(2);
+System.out.println(group.next());
+System.out.println(group.next());
+// 实现了 Iterable 接口提供遍历 EventLoop 的能力
+for (EventExecutor eventLoop : group) {
+    System.out.println(eventLoop);
+}
+```
+
+**nio 工作线程** 和 **非nio工作线程** 共同处理 io 事件
+
+```java
+// 2个 非nio工作线程
+DefaultEventLoopGroup normalWorkers = new DefaultEventLoopGroup(2);
+new ServerBootstrap()
+    // 2个 nio工作线程
+    .group(new NioEventLoopGroup(1), new NioEventLoopGroup(2))
+    .channel(NioServerSocketChannel.class)
+    .childHandler(new ChannelInitializer<NioSocketChannel>() {
+        @Override
+        protected void initChannel(NioSocketChannel ch)  {
+            ch.pipeline().addLast(new LoggingHandler(LogLevel.DEBUG));
+            ch.pipeline().addLast(normalWorkers,"myhandler",
+              new ChannelInboundHandlerAdapter() {
+                @Override
+                public void channelRead(ChannelHandlerContext ctx, Object msg) {
+                    ByteBuf byteBuf = msg instanceof ByteBuf ? ((ByteBuf) msg) : null;
+                    if (byteBuf != null) {
+                        byte[] buf = new byte[16];
+                        ByteBuf len = byteBuf.readBytes(buf, 0, byteBuf.readableBytes());
+                        log.debug(new String(buf));
+                    }
+                }
+            });
+        }
+    }).bind(8080).sync();
+```
+
+可以看到，nio group 和 非nio group 中的线程， **负载均衡地注册到 channel**（LoggingHandler 由 nio 工人执行，而我们自己的 handler 由非 nio 工人执行）
+
+
+
+<img src="pictures/image-20210602201451579.png" alt="image-20210602201451579" style="zoom:80%;" />
+
+
+
+NioEventLoop 处理 **普通任务** 和 **定时任务**
+
+``` java
+NioEventLoopGroup nioWorkers = new NioEventLoopGroup(2);
+nioWorkers.execute(()->{
+    log.debug("normal task...");
+});
+nioWorkers.scheduleAtFixedRate(() -> {
+    log.debug("timed task...");
+}, 0, 1, TimeUnit.SECONDS);
+```
+
+
+
+
+
+##### Channel & **Future & Promise**
+
+
+
+##### Handler & Pipeline
+
+<img src="pictures/image-20210526203301316.png" alt="image-20210526203301316" style="zoom: 60%;" />
+
+
+
+
+
+##### ByteBuf
+
+
+
+
+
+
+
+
+
+##### 
+

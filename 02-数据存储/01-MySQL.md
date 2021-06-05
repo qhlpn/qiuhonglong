@@ -95,11 +95,13 @@
    -- in 内表是驱动表；外表是被驱表，字段可使用索引。外大内小
    select A.id from A where A.id in (select id from B);
    
-   -- join 无法保证驱动表与被驱动位置不变，需要看后续表数据量增长情况。、
+   -- join 无法保证驱动表与被驱动位置不变，需要看后续表数据量增长情况。
    -- 可用 EXPLAIN 执行计划查询，第一行出现的表是驱动表
    
    -- 表关联查询，如果不涉及到 order by，首先可以考虑使用 join；若涉及到 order by，则需要确定驱动表与被驱动的位置，建议使用 exists 或者 in 代替
    -- 对驱动表的字段 order by 没影响，但对被驱动表 order by，则会产生 using temporary 和 filesort，性能较低。
+   https://www.cnblogs.com/sy270321/p/13127468.html
+   https://mp.weixin.qq.com/s/Iet8k3Ms2NemzQ8vvwli5A
    ```
 
 ### 唯一索引和普通索引
