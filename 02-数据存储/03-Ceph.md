@@ -274,6 +274,16 @@ ansible-playbook site.yml
      systemctl start ceph-mon@node-1
      systemctl enable ceph-mon@node-1
      ```
+     
+  9. 停止 monitor 服务并踢出集群
+
+     ``` shell
+     ceph mon remove node-1
+     systemctl stop ceph-mon@node-1
+     systemctl disable ceph-mon@node-1
+     ```
+
+     
 
 + **mgr**
 
@@ -347,6 +357,16 @@ ansible-playbook site.yml
        ```
        ceph-volume lvm create --bluestore --data centos/data --block.wal centos/wal --block.db centos/meta
        ```
+       
+    4. 删除 osd 服务
+    
+       ``` shell
+       ceph osd out osd.0
+       ceph osd down osd.0
+       ceph osd purge osd.0 --yes-i-really-mean-it
+       systemctl stop osd.0
+       systemctl disable osd.0
+       ```
 
 
 
@@ -355,12 +375,27 @@ ansible-playbook site.yml
 > architecture：https://docs.ceph.com/en/latest/architecture/
 > 						  https://is-cloud.blog.csdn.net/article/details/89419873
 > cluster.operations：https://docs.ceph.com/en/latest/rados/operations/
->                                         https://docs.ceph.com/en/latest/rados/man/
+>                                      https://docs.ceph.com/en/latest/rados/man/
+>                                      https://blog.51cto.com/hongchen99/2507959
 
 ```shell
-ceph -s 
+ceph [-s|-w] # 静态|动态
 ceph health detail
+ceph df # 存储使用情况
+ceph {mon/osd/pg/...} dump # 详情
+
+# 修改 ceph  配置 （1.2 临时生效，3 永久生效）
+# 1. ceph config
+ceph config set mon auth_allow_insecure_global_id_reclaim false
+ceph config get mon.node-1 auth_allow_insecure_global_id_reclaim # get 需要指明具体的节点，set 则不用
+# 2. 套接字 / 进程
+ceph --admin-daemon /var/run/ceph/ceph-mon.mode-1.asok config [show|set...]
+ceph daemon osd.0 config [get|set...]
+# 3. ceph.conf 
+vi /etc/ceph/ceph.conf
 ```
+
+
 
 #### 2.1 用户权限
 
@@ -428,7 +463,7 @@ ceph health detail
 
 
 
-#### 2.2 MON
+#### 2.2 mon
 
 + monmaptool 工具 
 
@@ -447,20 +482,30 @@ ceph health detail
 
 
 
-#### 2.3 OSD
+#### 2.3 osd
 
 + ceph-volume
 
   > https://docs.ceph.com/en/nautilus/man/8/ceph-volume/
 
-  ```
+  ```shell
   ceph-volume lvm [ trigger | create | activate | prepare | zap | list | batch ]
   ceph-volume simple [ trigger | scan | activate ]
   ceph-volume [-h] [–cluster CLUSTER] [–log-level LOG_LEVEL] [–log-path LOG_PATH]
   ceph-volume inventory
   ```
   
++ ceph osd
+
+  > https://blog.csdn.net/mpu_nice/article/details/106354561
+
+  ``` shell
+  ceph osd [ blocklist | blocked-by | create | new | deep-scrub | df | down | dump | erasure-code-profile | find | getcrushmap | getmap | getmaxosd | in | ls | lspools | map | metadata | ok-to-stop | out | pause | perf | pg-temp | force-create-pg | primary-affinity | primary-temp | repair | reweight | reweight-by-pg | rm | destroy | purge | safe-to-destroy | scrub | set | setcrushmap | setmaxosd | stat | tree | unpause | unset ]
+  ```
++ 操作示例
+
   ```shell
+  # 新增 osd 
   # bluestore: db + meta + wal
   # create 版
   ceph-volume lvm create --bluestore --data {dev or vg/lv} --block.wal {} --block.db {}
@@ -470,24 +515,30 @@ ceph health detail
   ceph-volume lvm prepare --bluestore --data {dev or vg/lv} --block.wal {} --block.db {} 
   ceph-volume lvm list
   ceph-volume lvm activate {ID} {FSID}
-  ```
   
-+ ceph osd
-
-  > https://blog.csdn.net/mpu_nice/article/details/106354561
-
-  ``` java
-  ceph osd [ blocklist | blocked-by | create | new | deep-scrub | df | down | dump | erasure-code-profile | find | getcrushmap | getmap | getmaxosd | in | ls | lspools | map | metadata | ok-to-stop | out | pause | perf | pg-temp | force-create-pg | primary-affinity | primary-temp | repair | reweight | reweight-by-pg | rm | destroy | purge | safe-to-destroy | scrub | set | setcrushmap | setmaxosd | stat | tree | unpause | unset ] …
+  # 扩容（新增）osd 后会触发 rebalance 重分布（部分PGs重新定位到新的osd）
+  # 设置标志位临时关闭，适用于当前业务流量较大的时候
+  ceph osd set norebalance 
+  ceph osd set nobackfill
+  ceph osd unset norebalance
+  ceph osd unset nobackfill
+  
+  # 清空磁盘数据  dd if=/dev/zero of=/dev/sdc bs=1M count=10 conv=fsync 
+  ceph-volume lvm zap /dev/sdc
+  
+  # osd 副本间数据一致性检查
+  ceph osd scrub {who}
+  ceph pg scrub {pg.id}  # ceph pg dump -> pg.id
   ```
 
   
 
-#### 2.4 MGR
+#### 2.4 mgr
 
 
 
 
-#### 2.5 RBD块存储
+#### 2.5 rbd 块存储
 
 > 命令文档：https://docs.ceph.com/en/latest/man/8/rbd/
 
@@ -496,7 +547,8 @@ ceph health detail
   > https://docs.ceph.com/en/latest/rados/operations/pools/#
 
   ```shell
-  ceph osd pool create poolName 64 64
+  ceph osd pool create poolName 64 64   -- replicated[default] 副本 | erasure 纠删码
+  ceph osd pool application enable poolName [rbd | rgw | cephfs] -- 启用应用类型
   ceph osd lspools
   ceph osd pool get poolName pg_num    
   ceph osd pool set poolName pg_num 128
@@ -512,12 +564,19 @@ ceph health detail
   rbd ls {poolname}
   rbd info {pool-name}/{image-name}
   rbd rm {pool-name}/{image-name}
+  
+  # 扩容分三步：底层磁盘扩容、分区扩容（可选）、
+  rbd resize {pool-name}/{image-name} --size 20G  # 磁盘扩容 fdisk -l
+  fdisk /dev/rbd0  # 若直接挂裸盘，则可跳过
+  resize2fs /dev/rbd0 # 文件系统扩容 df -h
   ```
 
 + 映射RBD块到磁盘
 
   ```shell
   rbd device map {pool-name}/{image-name}
+  # 取消映射
+  rbd device unmap /dev/rbd0
   ```
 
 + 磁盘逻辑卷操作
@@ -550,7 +609,7 @@ ceph health detail
     rbd snap create {pool-name}/{image-name}@{snap-name}   # 创建
     rbd snap ls {pool-name}/{image-name}
     rbd snap rollback {pool-name}/{image-name}@{snap-name}   # 回滚恢复
-    rbd snap rm {pool-name}/{image-name}@{snap-name}  
+    rbd snap rm {pool-name}/{image-name}@{snap-name}   
     ```
 
   + 克隆 Layering / Copy-On-Write
@@ -580,9 +639,43 @@ ceph health detail
 
 
 
-#### 2.6 Crush Map
+
+#### 2.6 rgw 对象存储
+
+> radosgw 对象存储网关：https://docs.ceph.com/en/latest/man/8/radosgw/#
+
+
+
+#### 2.7 cephfs 文件存储
+
+
+
+#### 2.8 rados object
+
+> object 对象操作：https://docs.ceph.com/en/latest/man/8/rados/
+
+``` shell
+rbd info {pool-name}/{image-name}  --> block_name_prefix
+rados -p {pool-name} ls | grep {block_name_prefix}   # object list
+rados -p {pool-name} stat {block_name_prefix}.000000000000423  # object stat 大小
+ceph osd map {pool-name} {block_name_prefix}.000000000000423 # object 映射到 pg osd 
+```
+
+
+
+#### 2.8 crush map
 
 > https://blog.csdn.net/weillee9000/article/details/102842642
+
+
+
+#### 2.9  log
+
+> cd /var/log/ceph/
+
+
+
+
 
 
 
@@ -635,7 +728,7 @@ ceph health detail
 
 
 
-#### 3.4 Rados存储
+#### 3.4 rados存储
 
 >  一个文件首先按照配置的大小切分成多个对象，对象经过哈希算法映射到不同的归置组PG中，整个PG再通过Crush算法映射到多个OSD中（第一个OSD是主节点，其它的是副本从节点）。
 
@@ -655,7 +748,7 @@ ceph health detail
 
 
 
-#### 3.5 Crush算法
+#### 3.5 crush算法
 
 > Object在通过PG存储到实际的OSD设备上时，会通过C-RUSH算法，按照预定好的规则选择N个OSD进行存储，即CRUSH(pgid) --> (osd1,osd2 ...)。不同对象存储到OSD设备位置无必然联系，对相同对象进行重复计算，其存储位置必然相同。	
 
@@ -669,16 +762,16 @@ ceph health detail
 
 
 
-#### 3.6 Place Group
+#### 3.6 place group
 
 > https://blog.csdn.net/weixin_44389885/article/details/86621686
-> $ ceph health detail
+> 指的是 pg 的状态（如osd挂了，则其上面的pg改变状态） pg:osd = 1:n
 > 正常状态：100% active + clean
 
 | 状态       | 描述                                                         |
 | ---------- | ------------------------------------------------------------ |
 | Active     | 活跃态。PG可以正常处理来自客户端的读写请求                   |
-| Clean      | 干净态。PG当前不存在待修复的对象， Acting Set和Up Set内容一致，并且大小等于存储池的副本数 |
+| Clean      | 干净态。PG当前不存在待修复的对象， Acting Set（OSD进程）和Up Set内容一致，并且大小等于存储池的副本数 <br />pg 1.a4edac00 (1.0) -> up ([1,0,2], p1) acting ([1,0,2], p1) |
 | Activating | Peering已经完成，PG正在等待所有PG实例同步并固化Peering的结果（Info、Log等） |
 |            |                                                              |
 | Degraded   | 降级态。Peering完成后，PG检测到存在不一致（需要被同步/修复）的OSD对象，或者当前 ActingSet（OSD进程） 小于存储池副本数 |
@@ -694,3 +787,4 @@ ceph health detail
 | Stale      | 未刷新态。 PG 存储的所有 OSD 都挂掉（单个挂掉可转移）；或者 Mon 没有检测到 OSD Primary 统计信息（网络抖动） |
 | Down       | 宕机态。当前剩余在线的 OSD 不足以完成数据修复                |
 
+#### 3.7 

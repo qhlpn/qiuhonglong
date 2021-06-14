@@ -87,7 +87,10 @@
 6. 遵循 **小表** 驱动 **大表** 原则
 
    ```sql
-   -- MySQL表关联算法是Nest Loop Join，是通过驱动表的结果集作为基础数据，然后循环遍历，作为被驱动表数据查询的过滤条件，最后对结果合并。
+   -- MySQL表连接查询算法是 Nest Loop Join
+   -- 通过循环遍历驱动表的数据，作为被驱动表数据查询的过滤条件，最后对结果合并
+   -- 驱动表不会走索引，被驱动表走索引
+   -- 可用 EXPLAIN 执行计划查询，第一行出现的表是驱动表
    
    -- exists 外表是驱动表；内表是被驱表，字段可使用索引。外小内大
    select A.id from A where exists (select 1 from B where B.id = A.id);
@@ -95,14 +98,43 @@
    -- in 内表是驱动表；外表是被驱表，字段可使用索引。外大内小
    select A.id from A where A.id in (select id from B);
    
-   -- join 无法保证驱动表与被驱动位置不变，需要看后续表数据量增长情况。
-   -- 可用 EXPLAIN 执行计划查询，第一行出现的表是驱动表
-   
-   -- 表关联查询，如果不涉及到 order by，首先可以考虑使用 join；若涉及到 order by，则需要确定驱动表与被驱动的位置，建议使用 exists 或者 in 代替
-   -- 对驱动表的字段 order by 没影响，但对被驱动表 order by，则会产生 using temporary 和 filesort，性能较低。
-   https://www.cnblogs.com/sy270321/p/13127468.html
-   https://mp.weixin.qq.com/s/Iet8k3Ms2NemzQ8vvwli5A
+   -- 对于 join 查询
+   -- 当连接查询没有 where 条件时：
+   -- 		1. left join 查询时，左表是驱动表，右表是被驱动表；
+   --      2. right join 查询时，右表是驱动表，左表是被驱动表；
+   --      3. inner join 查询时，数据量少的表是驱动表
+   -- 当连接查询带有 where 条件时：带 where 条件的表是驱动表，否则是被驱动表
    ```
+
+### Select 执行顺序
+
+> 引擎在执行下面每一步时，都会在内存中形成一张虚拟表，然后对虚拟表进行后续操作，并释放没用的虚拟表的内存，以此类推
+
+``` sql
+FROM
+<表名> # 笛卡尔积
+ON
+<筛选条件> # 对笛卡尔积的虚表进行筛选
+JOIN <inner join, left join, right join ...> 
+<join表> # 指定join，用于添加数据到on之后的虚表中，例如left join会将左表的剩余数据添加到虚表中
+WHERE
+<where条件> # 对上述虚表进行筛选
+GROUP BY
+<分组条件> # 分组
+<SUM()等聚合函数> # 用于having子句进行判断，在书写上这类聚合函数是写在having判断里面的
+HAVING
+<分组筛选> # 对分组后的结果进行聚合筛选
+SELECT
+<返回数据列表> # 返回的单列必须在group by子句中，聚合函数除外
+DISTINCT
+# 数据除重
+ORDER BY
+<排序条件> # 排序
+LIMIT
+<行数限制>
+```
+
+
 
 ### 唯一索引和普通索引
 
