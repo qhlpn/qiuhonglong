@@ -642,7 +642,10 @@ vi /etc/ceph/ceph.conf
 
 #### 2.6 rgw 对象存储
 
-> radosgw 对象存储网关：https://docs.ceph.com/en/latest/man/8/radosgw/#
+> radosgw 对象存储网关：https://docs.ceph.com/en/latest/man/8/radosgw/#   
+> 对象存储无状态（无磁盘、目录等），只有对外的上传和下载接口（无更新）
+
+> 接口高可用：keepalived（VIP：虚拟IP）+ haproxy（负载均衡）
 
 
 
