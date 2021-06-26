@@ -1,45 +1,133 @@
-###  Kubectl 命令
+###  Kubernetes 资源管理
 
-+ **声明式 YAML 文件**  kubectl  **apply**  -f  nginx-deployment.yaml
+#### kubectl 命令
 
-+ **显示资源列表**  kubectl  **get**  资源类型  \[-n 指定命名空间对象]  [-A all]  
-  + kubectl get deployments 
-  + kubectl get pods
-  + kubectl get nodes 
-  + kubectl get services
-  + kubectl get namespaces
+```shell
+kubectl [command] [resourceType] [name] [flags -n -A -o]   # kubectl集群命令行工具
+```
 
-+ **显示有关资源的详细信息**  kubectl  **describe**  资源类型  资源名称
-  + kubectl describe pod nginx-XXXXXX 
-  + kubectl describe deployment nginx
+1. 基本命令
 
-+ **查看pod中的容器的打印日志**  kubectl  **logs**  pod名称 
-  + kubectl logs -f nginx-pod-XXXXXXX
+   | 命令         | 翻译     | 命令作用                     |
+   | ------------ | -------- | ---------------------------- |
+   | create       | 创建     | 创建一个资源                 |
+   | edit         | 编辑     | 编辑一个资源                 |
+   | get          | 获取     | 获取一个资源                 |
+   | patch        | 更新     | 更新一个资源                 |
+   | delete       | 删除     | 删除一个资源                 |
+   | explain      | 解释     | 展示资源文档                 |
+   | cluster-info | 集群信息 | 显示集群信息                 |
+   | version      | 版本     | 显示当前Client和Server的版本 |
 
-+ **进入容器执行操作**  kubectl  **exec**  Pod名称  操作命令
-  + kubectl exec -it nginx-pod-xxxxxx /bin/bash
+2. 运行和调试
+
+   | 命令      | 翻译     | 命令作用               |
+   | --------- | -------- | ---------------------- |
+   | run       | 运行     | 在集群中运行指定的镜像 |
+   | expose    | 暴露     | 暴露资源为Service      |
+   | describe  | 描述     | 显示资源内部信息       |
+   | logs      | 日志     | 输出容器在Pod中的日志  |
+   | attach    | 缠绕     | 进入运行中的容器       |
+   | exec      | 执行     | 进入容器中执行命令     |
+   | cp        | 复制     | 在Pod内外复制文件      |
+   | rollout   | 首次展示 | 管理资源的发布         |
+   | scale     | 规模     | 扩（缩）容Pod的数量    |
+   | autoscale | 自动调整 | 自动调整Pod的数量      |
+   | apply     | 应用     | 通过文件对资源进行配置 |
+   | label     | 标签     | 更新资源上的标签       |
+
+
+
+#### 资源类型
+
+```shell
+kubectl api-resources   # kubernetes中所有的内容都抽象为资源
+```
+
+1. 集群容器资源
+
+   | 资源名称   | 缩写 | 资源作用     |
+   | ---------- | ---- | ------------ |
+   | nodes      | no   | 集群组成部分 |
+   | namespaces | ns   | 隔离Pod      |
+   | pods       | po   | 装载容器     |
+
+2. Pod资源控制器
+
+   | 资源名称                   | 缩写   | 资源作用    |
+   | -------------------------- | ------ | ----------- |
+   | replication controllers    | rc     | 控制Pod资源 |
+   | replicasets                | rs     | 控制Pod资源 |
+   | deployments                | deploy | 控制Pod资源 |
+   | daemonsets                 | ds     | 控制Pod资源 |
+   | jobs                       |        | 控制Pod资源 |
+   | cronjobs                   | cj     | 控制Pod资源 |
+   | horizontal pod autoscalers | hpa    | 控制Pod资源 |
+   | statefulsets               | sts    | 控制Pod资源 |
+
+3. 服务发现资源
+
+   | 资源名称 | 缩写 | 资源作用        |
+   | -------- | ---- | --------------- |
+   | services | svc  | 统一Pod对外接口 |
+   | ingress  | ing  | 统一Pod对外接口 |
+
+4. 存储资源
+
+   | 资源名称                 | 缩写 | 资源作用 |
+   | ------------------------ | ---- | -------- |
+   | volume attachments       |      | 存储     |
+   | persistent volumes       | pv   | 存储     |
+   | persistent volume claims | pvc  | 存储     |
+
+5. 配置资源
+
+   | 资源名称   | 缩写 | 资源作用 |
+   | ---------- | ---- | -------- |
+   | configmaps | cm   | 配置     |
+   | secrets    |      | 配置     |
+
+
+
+#### 资源管理方式
+
+1. 命令式：
+
+   kubectl create deployment nginx --image=nginx:1.17.1 --dry-run=client -n dev -o yaml
+
+   kubectl run nginx --image=nginx:1.17.1 --port=80 --namespace=dev
+
+2. 命令式 + 配置：kubectl create/patch -f nginx-pod.yaml
+
+3. 声明式 + 配置： kubectl apply -f nginx-pod.yaml
 
 
 
 ### Kubernetes 概念
 
-```
-- Kubernetes 是自动化容器编排的开源平台
-    - 自动化容器的部署和复制
-    - 随时扩展或收缩容器规模
-    - 将容器组织成组，并且提供容器间的负载均衡
-    - 很容易地升级应用程序容器的新版本
-    - 提供容器弹性，如果容器失效就替换它，等等
-```
+Kubernetes 是自动化容器编排的开源平台
+
+<img src="pictures/image-20210622190228210.png" alt="image-20210622190228210" style="zoom: 67%;" />
+
+通过部署Nginx服务来说明Kubernetes系统各个组件调用关系：
+
+1. 首先需要明确，一旦Kubernetes环境启动之后，master和node都会将自身的信息存储到etcd数据库中。
+2. Nginx服务的安装请求首先会被发送到master节点上的API Server组件。
+3. API Server组件会调用Scheduler组件来决定到底应该把这个服务安装到那个node节点上。此时，它会从etcd中读取各个node节点的信息，然后按照一定的算法进行选择，并将结果告知API Server。
+4. API Server调用Controller-Manager去调用Node节点安装Nginx服务。
+5. Kubelet接收到指令后，会通知Docker，然后由Docker来启动Nginx的Pod。Pod是Kubernetes的最小操作单元，容器必须跑在Pod中。
+6. Nginx服务就运行了，如果需要访问Nginx，就需要通过kube-proxy来对Pod产生访问的代理，这样，外界用户就可以访问集群中的Nginx服务了。
+
+
 
 ##### **Master**
 
 ```
-- Master 是集群控制平台（Control Plane），负责协调集群中的所有活动，例如调度应用程序，维护应用程序的状态，扩展和更新应用程序。
+- Master 集群控制平台，负责协调集群中的所有活动。
 - Master 组件包括：
-	- kube-apiserver：提供 Kubernetes API, 是控制平台的前端接口
-	- etcd：存储配置信息和集群状态数据，提供一致性和高可用的键值对存储组件
-	- kube-scheduler：提供调度服务，监控新创建尚未分配到节点上的Pod，选择合适的节点执行Pod
+	- apiserver：提供 Kubernetes API, 是控制平台的前端接口
+	- etcd：存储配置信息和集群状态数据
+	- kube-scheduler：提供调度服务，选择合适的节点执行Pod
 	- controller：控制器，监控 apiserver 当前状态，不断修正接近用户yaml文件声明的期望值
         - kube-controller-manager：统一运行控制器，包括
             - Node controller：负责监听节点停机事件
@@ -55,12 +143,10 @@
 
 ``` 
 - 节点是虚拟机或物理计算机，充当k8s集群中的工作计算机。（外网IP）
-- Worker节点应具有用于处理容器操作的工具，例如Docker。
-- 每个Worker节点都有一个Kubelet，它管理该Worker节点并负责与Master节点通信，管理 Pod（容器组）和 Pod（容器组）内运行的 Container（容器）。
 - Node 组件包括：
-	- kubelet：确保容器处于运行和健康状态
+	- kubelet：管理Worker节点并负责与Master节点通信，管理 Pod 内运行的 Container 。
 	- kube-proxy：维护节点的网络规则，实现Pod网络通信，是实现Service的重要部分
-	- container-engine：支持多种容器引擎，如 Docker cri-o rktlet
+	- container-engine：容器引擎，如 Docker cri-o rktlet
 ```
 
 ##### **Pod**
@@ -72,10 +158,6 @@
 	- 共享存储，称为 Volumes 卷，即图上紫色圆柱
 	- 网络，每个 Pod（容器组）在集群中有个唯一的 IP，pod（容器组）中的 container（容器）共享该IP地址
 	- container（容器）的基本信息，例如容器的镜像版本，对外暴露的端口
-	
-- 当我们在 k8s 上创建 Deployment 时，会在集群上创建包含容器的 Pod (而不是直接创建容器)。
-- 每个Pod都与运行它的 worker 节点（Node）绑定，并保持在那里直到终止或被删除。
-- 如果节点（Node）发生故障，则会在群集中的其他可用节点（Node）上运行相同的 Pod（从同样的镜像创建 Container，使用同样的配置，IP 地址不同，Pod 名字不同）。
 ```
 
 > Node             :  物理机
@@ -87,7 +169,8 @@
 ##### **Deployment**
 
 ```
-- 在 k8s 集群中发布 Deployment 后，Master 的 Deployment 将指示 k8s 创建和更新应用程序 (Docker Image) 的实例 (Docker Container)，调度到集群中的具体的节点上。实例会被包含在 Pod。 
+- Pod 控制器：Deployment
+- 在kubernetes中，Pod是最小的控制单元，但是kubernetes很少直接控制Pod，都是通过Pod控制器来完成
 ```
 
 ![](https://kuboard.cn/assets/img/module_02_first_app.25e902c4.svg)
@@ -96,37 +179,41 @@
 
 ``` yaml
 - 创建文件 nginx-deployment.yaml
-apiVersion: apps/v1	# 与k8s集群版本有关，使用 kubectl api-versions 即可查看当前集群支持的版本
-kind: Deployment	# 该配置的类型，我们使用的是 Deployment
-metadata:	        # 译名为元数据，即 Deployment 的一些基本属性和信息
-  name: nginx-deployment	#Deployment 的名称
-  labels:	    # 标签，可以灵活定位一个或多个资源，其中key和value均可自定义，可以定义多组，目前不需要理解
-    app: nginx	# 为该Deployment设置key为app，value为nginx的标签
-spec:	        # 这是关于该Deployment的描述，可以理解为你期待该Deployment在k8s中如何使用
-  replicas: 1	# 使用该Deployment创建一个应用程序实例
-  selector:	    # 标签选择器，与上面的标签共同作用，目前不需要理解
-    matchLabels: # 选择包含标签app:nginx的资源
+apiVersion: apps/v1	
+kind: Deployment 	
+metadata:	        
+  name: nginx-deployment	
+  labels:	    
+    app: nginx	
+spec:	        # Deployment specific
+  replicas: 1	
+  selector:	   
+    matchLabels: 
       app: nginx
-  template:	    # 这是选择或创建的Pod的模板
-    metadata:	# Pod的元数据
-      labels:	# Pod的标签，上面的selector即选择包含标签app:nginx的Pod
+  template:	    # Pod template
+    metadata:	
+      labels:	
         app: nginx
-    spec:	    # 期望Pod实现的功能（即在pod中部署）
-      containers:	# 生成container，与docker中的container是同一种
-      - name: nginx	# container的名称
-        image: nginx:1.7.9	# 使用镜像nginx:1.7.9创建container，该container默认80端口可访问
+    spec:	    # Pod specific
+      containers:	
+      - name: nginx
+        image: nginx:1.7.9
 ```
 
 ##### **Service** 
 
 ``` 
-- Service 屏蔽后端系统的 Pod（容器组）在销毁、创建过程中所带来的 IP 地址的变化（每个 Pod都有唯一的 IP 地址）, 实现对前端透明统一。
-- 当 worker node（节点）故障时，节点上运行的 Pod（容器组）也会消失。然后，Deployment 可以通过创建新的 Pod（容器组）来动态地将群集调整回原来的状态，以使应用程序保持运行.
-- Service 使 Pod（容器组）之间的相互依赖解耦（原本从一个 Pod 中访问另外一个 Pod，需要知道对方的 IP 地址）.
-- Service 使用 Labels、LabelSelector(标签和选择器) 匹配一组 Pod.
+- Pod IP会随着 Pod 的重建产生变化，同时 Pod IP仅仅是集群内部可见的虚拟的IP，外部无法访问。
+- Service 屏蔽后端系统的 Pod 在销毁、创建过程中所带来的 IP 地址的变化, 实现对前端透明统一。
+- Service 使 Pod 之间的相互依赖解耦（原本从一个 Pod 中访问另外一个 Pod，需要知道对方的 IP 地址）.
+- Service 使用 Labels、LabelSelector 匹配一组 Pod.
 ```
 
-<img src="https://kuboard.cn/assets/img/module_04_services.11cdc7bc.svg" style="zoom:125%;" />
+
+
+<img src="pictures/image-20210622200224118.png" alt="image-20210622200224118" style="zoom: 67%;" />
+
+
 
 ##### **LabelSelector** 
 
@@ -147,52 +234,59 @@ spec:	        # 这是关于该Deployment的描述，可以理解为你期待该
 	- 使用标签对 Kubernetes 对象进行分类
 
 - 上图体现了 Labels（标签）和 LabelSelector（标签选择器）之间的关联关系
-    - Deployment B 含有 LabelSelector 为 app=B, 通过此方式声明含有 app=B 标签的 Pod 与之关联
+    - Deployment B 含有 LabelSelector 为 app=B, 通过此方式，将含有 app=B 标签的 Pod 与之关联
     - 通过 Deployment B 创建的 Pod 包含标签为 app=B
-    - Service B 通过标签选择器 app=B 选择可以路由的 Pod
+    - Service B 通过标签选择器 app=B 选择可以路由的 app=B 的 Pod
 ```
+
+
 
 + **操作：为 Deployment 创建 Service**
 
 ``` yaml
 - 创建文件 nginx-deployment.yaml
-apiVersion: apps/v1	# 与k8s集群版本有关，使用 kubectl api-versions 即可查看当前集群支持的版本
-kind: Deployment	# 该配置的类型，我们使用的是 Deployment
-metadata:	        # 译名为元数据，即 Deployment 的一些基本属性和信息
-  name: nginx-deployment	#Deployment 的名称
-  labels:	    # 标签，可以灵活定位一个或多个资源，其中key和value均可自定义，可以定义多组，目前不需要理解
-    app: nginx	# 为该Deployment设置key为app，value为nginx的标签
-spec:	        # 这是关于该Deployment的描述，可以理解为你期待该Deployment在k8s中如何使用
-  replicas: 1	# 使用该Deployment创建一个应用程序实例
-  selector:	    # 标签选择器，与上面的标签共同作用，目前不需要理解
-    matchLabels: # 选择包含标签app:nginx的资源
+apiVersion: apps/v1	
+kind: Deployment	# Deployment template
+metadata:	       
+  name: nginx-deployment	
+  labels:	    
+    app: nginx	
+spec:	         # Deployment specific
+  replicas: 1	
+  selector:	    
+    matchLabels: 
       app: nginx
-  template:	    # 这是选择或创建的Pod的模板
-    metadata:	# Pod的元数据
-      labels:	# Pod的标签，上面的selector即选择包含标签app:nginx的Pod
+  template:	     # Pod template
+    metadata:	
+      labels:	
         app: nginx
-    spec:	    # 期望Pod实现的功能（即在pod中部署）
-      containers:	# 生成container，与docker中的container是同一种
-      - name: nginx	# container的名称
-        image: nginx:1.7.9	# 使用镜像nginx:1.7.9创建container，该container默认80端口可访问
+    spec:	     # Pod specific
+      containers:	
+      - name: nginx	
+        image: nginx:1.7.9	
 
 - 创建文件 nginx-service.yaml
 apiVersion: v1
-kind: Service
+kind: Service      # Service template
 metadata:
-  name: nginx-service	# Service 的名称
-  labels:     	# Service 自己的标签
-    app: nginx	# 为该 Service 设置 key 为 app，value 为 nginx 的标签
-spec:	    # 这是关于该 Service 的定义，描述了 Service 如何选择 Pod，如何被访问
-  selector:	    # 标签选择器
-    app: nginx	# 选择包含标签 app:nginx 的 Pod
+  name: nginx-service	
+  labels:     	
+    app: nginx	
+spec:	    # Service specific
+  selector:	   
+    app: nginx	
   ports:
-  - name: nginx-port	# 端口的名字
-    protocol: TCP	    # 协议类型 TCP/UDP
+  - name: nginx-port	
+    protocol: TCP	    
     port: 80	        # 集群内的其他容器组可通过 80 端口访问 Service
-    nodePort: 32600   # 通过任意节点的 32600 端口访问 Service
+    nodePort: 32600   # 外部通过主机32600端口访问 Service
     targetPort: 80	# 将请求转发到匹配 Pod 的 80 端口
-  type: NodePort	# Serive的类型，ClusterIP/NodePort/LoaderBalancer
+  type: NodePort	
+
+# ClusterIP：默认值，它是kubernetes系统自动分配的虚拟IP，只能在集群内部访问。
+# NodePort：将Service通过指定的Node上的端口暴露给外部，通过此方法，就可以在集群外部访问服务。
+# LoadBalancer：使用外接负载均衡器完成到服务的负载分发，注意此模式需要外部云环境的支持。
+# ExternalName：把集群外部的服务引入集群内部，直接使用。
 
 - 启动 service 服务进程
 kubectl apply -f nginx-service.yaml
@@ -200,10 +294,10 @@ kubectl apply -f nginx-service.yaml
 curl [anyNode ip]:32600
 ```
 
-##### namespaces
+##### Namespaces
 
 ```
-命名空间，可对资源进行分组
+命名空间，可对资源进行分组隔离
 ```
 
 ##### **Scaling**
@@ -281,7 +375,6 @@ watch kubectl get pods -l app=nginx
 #### Node 节点
 
 ```
-Kubernetes中节点（node）指工作机器，可以是虚拟机也可以是物理机
 工作节点包含了运行Pod所需的服务，如 container-engine、kubelet、kube-proxy 等，并都由 master 组件进行管理。
 ```
 
@@ -385,44 +478,6 @@ spec:
     - containerPort: 80
 ```
 
-+ **对象管理**
-
-  + **命令式对象管理**
-
-    ```
-    - 纯 kubectl 指令管理对象
-    kubectl run 	创建 Deployment 对象
-    kubectl expose	创建 Service 对象
-    kubectl autoscale  创建 Autoscaler 对象
-    ```
-
-  + **命令式对象配置**
-
-    ```
-    - kubectl 具体操作指令 + yaml 配置文件 管理对象
-    kubectl create | replace | delete -f ...yaml
-    ```
-
-  + **声明式对象配置**
-
-    ```
-    - 声明式：命令中不指定具体操作，通过 kubectl 自动检测对象并自动进行创建、更新和删除操作
-    - 同时，保留已有对象的修改
-    kubectl apply -f ...yaml
-    ```
-
-+ **名称空间**
-
-  ```
-  Kubernetes通过名称空间（namespace），可在同一个物理集群上为多组团队提供多个不同虚拟的集群空间
-  
-  - 查看哪些 Kubernetes Objects 在命名空间里，哪些不存在
-  kubectl api-resources -namespaced=true|false
-  
-  - service 的 DNS 条目
-  <service-name>.<namespace-name>.svc.cluster.local
-  ```
-
 + **标签和选择器**
 
   ```yaml
@@ -454,7 +509,7 @@ spec:
 + **注解**
 
   ```yaml
-  # 注解（annotation）可以为Kubernetes对象添加一些元数据，用于客户端读取
+  # 注解（annotation）可以为对象添加一些元数据，用于客户端读取
   apiVersion: v1
   kind: Pod
   metadata:
@@ -484,7 +539,6 @@ spec:
   Kubernetes 在容器的生命周期中提供两个 hook 钩子函数，包括：
   - PostStart：在容器创建后执行
   - PreStop：在容器终止前执行
-  yaml
   spec:
     containers:
     - name: lifecycle-demo-container
@@ -503,11 +557,94 @@ spec:
 #### Pod 容器组
 
 ```
-Pod（容器组）是 Kubernetes 中最小调度单元，代表一个独立的应用程序运行实例，该实例可能由单个容器或者几个紧耦合在一起的容器组成
+Pod 是 Kubernetes 中最小调度单元
 Pod 为 组内容器 提供两种共享资源，包括 网络和存储：
-	- 网络：每个Pod分配独立的IP地址；Pod中所有容器共享一个网络名称空间，容器IP相同，端口不同，可用localhost:port通信
-	- 存储：Pod定义共享数据卷，组内容器可以访问共享数据。
+	- 网络：每个 Pod 分配独立的 IP地址；Pod中所有容器共享网络名称空间，容器IP相同，端口不同，可用localhost:port通信
+	- 存储：Pod 定义共享数据卷，组内容器可以访问共享数据。
 ```
+
+``` yaml
+apiVersion: v1     # 必选，版本号，例如v1
+kind: Pod       　 # 必选，资源类型，例如 Pod
+metadata:       　 # 必选，元数据
+  name: string     # 必选，Pod名称
+  namespace: string  # Pod所属的命名空间,默认为"default"
+  labels:       　　  # 自定义标签列表
+    key: value      　
+spec:  # 必选，Pod中容器的详细定义
+  containers:  # 必选，Pod中容器列表
+    - name: string   # 必选，容器名称
+      image: string  # 必选，容器的镜像名称
+      imagePullPolicy: [ Always|Never|IfNotPresent ]  # 获取镜像的策略 
+      command: [string]   # 容器的启动命令列表，如不指定，使用打包时使用的启动命令
+      args: [string]      # 容器的启动命令参数列表
+      workingDir: string  # 容器的工作目录
+      volumeMounts:       # 挂载到容器内部的存储卷配置
+        - name: string      # 引用pod定义的共享存储卷的名称，需用volumes[]部分定义的的卷名
+          mountPath: string # 存储卷在容器内mount的绝对路径，应少于512字符
+          readOnly: boolean # 是否为只读模式
+      ports: # 需要暴露的端口库号列表
+        - name: string        # 端口的名称
+          containerPort: int  # 容器需要监听的端口号
+          hostPort: int       # 容器所在主机需要监听的端口号，默认与Container相同
+          protocol: string    # 端口协议，支持TCP和UDP，默认TCP
+      env:   # 容器运行前需设置的环境变量列表
+        - name: string  # 环境变量名称
+          value: string # 环境变量的值
+      resources: # 资源限制和请求的设置
+        limits:  # 资源限制的设置
+          cpu: string     # Cpu的限制，单位为core数，将用于docker run --cpu-shares参数
+          memory: string  # 内存限制，单位可以为Mib/Gib，将用于docker run --memory参数
+        requests: # 资源请求的设置
+          cpu: string    # Cpu请求，容器启动的初始可用数量
+          memory: string # 内存请求,容器启动的初始可用数量
+      lifecycle: # 生命周期钩子
+  postStart: # 容器启动后立即执行此钩子,如果执行失败,会根据重启策略进行重启
+  preStop: # 容器终止前执行此钩子,无论结果如何,容器都会终止
+    livenessProbe:  # 对Pod内各容器健康检查的设置，当探测无响应几次后将自动重启该容器
+      exec:       　 # 对Pod容器内检查方式设置为exec方式
+        command: [string]  # exec方式需要制定的命令或脚本
+      httpGet:       # 对Pod内个容器健康检查方法设置为HttpGet，需要制定Path、port
+        path: string
+        port: number
+        host: string
+        scheme: string
+        HttpHeaders:
+          - name: string
+            value: string
+      tcpSocket:     # 对Pod内个容器健康检查方式设置为tcpSocket方式
+        port: number
+        initialDelaySeconds: 0       # 容器启动完成后首次探测的时间，单位为秒
+        timeoutSeconds: 0    　　    # 对容器健康检查探测等待响应的超时时间，单位秒，默认1秒
+        periodSeconds: 0     　　    # 对容器监控检查的定期探测时间设置，单位秒，默认10秒一次
+        successThreshold: 0
+        failureThreshold: 0
+        securityContext:
+          privileged: false
+  restartPolicy: [Always | Never | OnFailure]  # Pod的重启策略
+  nodeName: <string> # 设置NodeName表示将该Pod调度到指定到名称的node节点上
+  nodeSelector: obeject # 设置NodeSelector表示将该Pod调度到包含这个label的node上
+  imagePullSecrets: # Pull镜像时使用的secret名称，以key：secretkey格式指定
+    - name: string
+  hostNetwork: false   # 是否使用主机网络模式，默认为false，如果设置为true，表示使用宿主机网络
+  volumes:   # 在该pod上定义共享存储卷列表
+    - name: string    # 共享存储卷名称 （volumes类型有很多种）
+      emptyDir: {}       # 类型为emtyDir的存储卷，与Pod同生命周期的一个临时目录。为空值
+      hostPath: string   # 类型为hostPath的存储卷，表示挂载Pod所在宿主机的目录
+        path: string      　　        # Pod所在宿主机的目录，将被用于同期中mount的目录
+      secret:       　　　# 类型为secret的存储卷，挂载集群与定义的secret对象到容器内部
+        scretname: string
+        items:
+          - key: string
+            path: string
+      configMap:         # 类型为configMap的存储卷，挂载预定义的configMap对象到容器内部
+        name: string
+        items:
+          - key: string
+            path: string
+```
+
+
 
 + **生命周期**
 

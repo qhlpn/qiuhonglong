@@ -759,9 +759,9 @@ ceph osd map {pool-name} {block_name_prefix}.000000000000423 # object 映射到 
 
 > ceph通过cluster_map存储分布式集群的结构拓扑，集群物理结构定义为树形结构，默认10种层级，每个**中间节点**称为**bucket**，**叶子节点**一定是**osd**
 
-> 若以host为单位，如host0，则落到dev0 dev1
+> 若以host为单位，则不同副本将落到不同host，如host0，再落到dev0 dev1
 >
-> 若以rack为单位，如rack0，则落到dev0 ... 8个
+> 若以rack为单位，则不同副本将落到不同rack，如rack0，再落到dev0 ... 8
 
 
 
@@ -774,7 +774,7 @@ ceph osd map {pool-name} {block_name_prefix}.000000000000423 # object 映射到 
 | 状态       | 描述                                                         |
 | ---------- | ------------------------------------------------------------ |
 | Active     | 活跃态。PG可以正常处理来自客户端的读写请求                   |
-| Clean      | 干净态。PG当前不存在待修复的对象， Acting Set（OSD进程）和Up Set内容一致，并且大小等于存储池的副本数 <br />pg 1.a4edac00 (1.0) -> up ([1,0,2], p1) acting ([1,0,2], p1) |
+| Clean      | 干净态。PG当前不存在待修复的对象， Acting Set（OSD进程）和Up Set（crush osd）内容一致，并且大小等于存储池的副本数 <br />pg 1.a4edac00 (1.0) -> up ([1,0,2], p1) acting ([1,0,2], p1) |
 | Activating | Peering已经完成，PG正在等待所有PG实例同步并固化Peering的结果（Info、Log等） |
 |            |                                                              |
 | Degraded   | 降级态。Peering完成后，PG检测到存在不一致（需要被同步/修复）的OSD对象，或者当前 ActingSet（OSD进程） 小于存储池副本数 |
