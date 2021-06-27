@@ -149,6 +149,8 @@ Kubernetes 是自动化容器编排的开源平台
 	- container-engine：容器引擎，如 Docker cri-o rktlet
 ```
 
+<img src="pictures/image-20210606215411690.png" alt="image-20210606215411690" style="zoom:80%;" />
+
 ##### **Pod**
 
 ```
