@@ -206,7 +206,7 @@ typedef struct redisObject {
 
 + **内存淘汰**
 
-  > 当惰性和定期没把某些key删除时，则key当内存满时走内存淘汰机制 
+  > 当惰性和定期没把某些key删除时，则key当内存满时走内存淘汰机制
 
   ```java
   /**
@@ -267,7 +267,7 @@ typedef struct redisObject {
   # 三个配置项，满足任意一个都会触发
   ```
 
-  >优点：文件体积小，恢复速度快	缺点：时间窗口数据丢失
+  >优点：恢复速度快	缺点：时间窗口数据丢失
 
 + **AOF 文件追加**
 
@@ -287,7 +287,7 @@ typedef struct redisObject {
   auto-aof-rewrite-size 64mb		 # 文件体积超过多大
   ```
 
-  > 优点：数据更完整，易读性强	缺点：文件体积大，IO压力大
+  > 优点：数据更完整，易读性强	缺点：重放速度慢
 
 + **混合持久化 Redis 4**
 
@@ -299,8 +299,12 @@ typedef struct redisObject {
   # AOF 重写的方式
   aof-use-rdb-preamble yes  # 默认 false 不开启 
   ```
-
-
+  
+  > 冷备：读写操作均不可进行
+  >
+  > 温备：读操作可执行；但写操作不可执行
+  >
+  > 热备：读写操作均可执行
 
 
 
@@ -398,17 +402,17 @@ typedef struct redisObject {
   + **数据丢失问题**
 
     > Sentinel 只能保证 Redis 主备切换可用，但不保证数据零丢失。
->
+    >
     > **Redis 主备切换是 AP 模型，Sentinel集群 raft 数据一致性是 CP 模型。**
     
-+ **异步数据复制**：master 在部分数据还未同步到 slave 前就宕机
+    + **异步数据复制**：master 在部分数据还未同步到 slave 前就宕机
     + **多个master（脑裂）**：master 与集群网络分区时，哨兵会再选举出新的 master；当分区结束时，旧的 master 会作为 slave，清空自身数据，挂到新的 master 上，从而丢失 **分区期间** 接收到的客户端数据。
     
     > 解决方法：`min-slaves-to-write 1`        `min-slaves-max-lag 10` 
->
+    >
     > 要求主机至少有1个从机，同时数据同步时的延迟不能超过10s，否则主机拒绝写请求。
-    
-    
+
+​    
 
 ### Redis Cluster
 
@@ -422,7 +426,7 @@ typedef struct redisObject {
 
     <img src=".\pictures\073.png" style="zoom:70%;" />
 
-    > gossip：所有节点持有一份元数据，当节点更新了数据，就通知其它节点进行 **数据同步** 。优点：分散节点更新i元数据的请求。缺点：更新有时延滞后。
+    > gossip：所有节点持有一份元数据，当节点更新了数据，就通知其它节点进行 **数据同步** 。优点：分散节点更新元数据的请求。缺点：更新有时延滞后。
 
     > gossip 消息命令有： meet、ping、pong、fail
 

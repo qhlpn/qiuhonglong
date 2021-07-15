@@ -1,5 +1,9 @@
 # NIO 基础
 
+传统的 BIO 服务端编程采用 ”每线程每连接“ 的处理模型，在面对大量的客户端并发连接时，服务端的资源压力很大；并且线程的利用率很低，如果当前线程没有数据可读，它会阻塞在 read 操作上。
+
+<img src="pictures/image-20210714141856812.png" alt="image-20210714141856812" style="zoom:67%;" />
+
 ## 1. 三大组件
 
 ### Channel
@@ -198,7 +202,7 @@ public class Server {
 }
 ```
 
-**注意：** keys != **selected**Keys  两个不同的集合
+**注意：** keys != **selected**Keys  位于两个不同的集合中
 
 1.  iter.remove 作用：select 在事件发生后，就会将相关的 key 放入 **selected**Keys 集合，但不会在处理完后从 selectedKeys 集合中移除，需要我们自己编码删除
 
@@ -257,7 +261,7 @@ public class Server {
                     int write = sc.write(buffer);
                     System.out.println("实际写入字节:" + write);
                     if (!buffer.hasRemaining()) { // 写完了
-                        key.interestOps(key.interestOps() - SelectionKey.OP_WRITE);
+                        key.interestOps(key.interestOps() - SelectionKey.OP_WRITE); // 取消注册
                         key.attach(null);
                     }
                 }
@@ -275,6 +279,8 @@ public class Server {
 
 
 ### 单 Reactor 多线程模型
+
+单个线程处理响应并分发，多个线程处理事件
 
 <img src="pictures/image-20210602190526990.png" alt="image-20210602190526990" style="zoom: 80%;" />
 
@@ -439,6 +445,31 @@ class Client {
 ## 1. 基本架构
 
 ### 多 Reactor 多线程模型
+
+针对单 Reactor 多线程模型中，Reactor 在单个线程中运行，面对高并发的场景易成为性能瓶颈的缺陷，主从 Reactor 多线程模式让 Reactor 在多个线程中运行（分成 MainReactor 线程与 SubReactor 线程）。这种模式的基本工作流程为：
+
++ Reactor 主线程 MainReactor 对象通过 select 监听客户端连接事件，收到事件后，通过 Acceptor 处理客户端连接事件。
++ 当 Acceptor 处理完客户端连接事件之后【SocketChannel sc = ssc.accept()】，MainReactor 将连接分配给 SubReactor。
++ SubReactor 将连接加入到自己的连接队列进行监听，并创建 Handler 对各种事件进行处理。
++ 当连接上有新事件发生的时候，SubReactor 就会调用对应的 Handler 处理。
++ Handler 通过 read 从连接上读取请求数据，将请求数据分发给 Worker 线程池进行业务处理。
++ Worker 线程池会分配独立线程来完成真正的业务处理，并将处理结果返回给 Handler。Handler 通过 send 向客户端发送响应数据。
+
+<img src="pictures/image-20210714142113407.png" alt="image-20210714142113407" style="zoom:80%;" />
+
+**Netty：多Reactor多线程模型**
+
++ BossGroup 线程维护 Selector，ServerSocketChannel 注册到这个 Selector 上，只关注连接建立请求事件（相当于主 Reactor）
++ 当接收到来自客户端的连接建立请求事件的时候，通过 ServerSocketChannel.accept 方法获得对应的 SocketChannel，并封装成 NioSocketChannel 注册到 WorkerGroup 线程中的 Selector，每个 Selector 运行在一个线程中（相当于从 Reactor）
++ BossGroup 和 WorkerGroup 是线程池，每个线程池中都有 NioEventLoop 线程，不断循环的执行事件处理。每个 NioEventLoop 都包含一个 Selector，用于监听注册在其上的 ServerSocketChannel / SocketChannel
++ 每个 BossNioEventLoop 中循环执行以下三个步骤
+  + select：轮训注册在其上的 ServerSocketChannel 的 accept 事件（OP_ACCEPT 事件）
+  + processSelectedKeys：处理 accept 事件，与客户端建立连接，生成一个 NioSocketChannel，并将其注册到某个 WorkerNioEventLoop 上的 Selector 上
+  + runAllTasks：再去以此循环处理任务队列中的其他任务
++ 每个 WorkerNioEventLoop 中循环执行以下三个步骤
+  + select：轮训注册在其上的 NioSocketChannel 的 read/write 事件（OP_READ/OP_WRITE 事件）
+  + processSelectedKeys：在对应的 NioSocketChannel 上处理 read/write 事件
+  + runAllTasks：再去以此循环处理任务队列中的其他任务
 
 <img src="pictures/image-20210526203224405.png" alt="image-20210526203224405" style="zoom: 60%;" />
 

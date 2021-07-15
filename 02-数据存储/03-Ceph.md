@@ -47,6 +47,9 @@
       systemctl restart ntpd
       systemctl enable ntpd
       ntpq -pn
+      
+      # 同步外部
+      # ntpdate cn.pool.ntp.org
       ```
 
     + 配置YUM源
@@ -565,7 +568,7 @@ vi /etc/ceph/ceph.conf
   rbd info {pool-name}/{image-name}
   rbd rm {pool-name}/{image-name}
   
-  # 扩容分三步：底层磁盘扩容、分区扩容（可选）、
+  # 扩容分三步：底层磁盘扩容、分区扩容（可选）、文件系统扩容
   rbd resize {pool-name}/{image-name} --size 20G  # 磁盘扩容 fdisk -l
   fdisk /dev/rbd0  # 若直接挂裸盘，则可跳过
   resize2fs /dev/rbd0 # 文件系统扩容 df -h

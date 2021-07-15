@@ -14,13 +14,13 @@
 
 + **Consumer**：消费者
 
-+ **Consumer Group**：消费者组，组内消费者不会消费同个消息，组可实现消息 **广播和单播**
++ **Consumer Group**：消费者组。Topic 会被所有 CG 消费到，但同个组内的消费者不会消费同个消息。CG 组可实现消息 **广播（设置每个Consumer有独立的CG）和单播（所有Consumer均放在同个CG内）**
 
 + **Broker**：Kafka 服务器
 
 + **Topic**：主题（逻辑概念），用来区分不同类型的消息，类似于数据库的表
 
-+ **Partition**：分区（物理存储），每个 Partition 对应一个目录，里面存储消息文件和索引文件，**分区可并发读写提速**
++ **Partition**：分区（物理存储），每个 Partition 对应一个目录，里面存储消息文件和索引文件，**分区可并发读写提速**，每个 Partition 分配固定的 Consumer（直至重平衡） 
 
 + **Offset**：偏移量，记录 Group 消费 Partition 所处位置。**可实现Partition 在组内的消费有序**，**不保证主题级别有序性**
 
@@ -113,7 +113,6 @@
 
   + **消息接收由单个线程跑单个Consumer；消息处理由不同的线程分别对应不同的Worker。**
 **消息接收和消息处理解耦，即 Reactor模型 = IO多路复用 + 事件驱动**
-    
   
   <img src="pictures\image-20201130174408275.png" alt="image-20201130174408275" style="zoom:80%;" />
   
@@ -234,11 +233,11 @@
   >
   > Zookeeper 四种目录：永久、永久顺序、临时、临时顺序
   >
-  > Zookeeper 利用 **临时** 特性进行选主。节点谁先写入谁是 Leader；Leader 宕机则删除目录，节点重新竞争。
+  > Zookeeper 利用 **临时顺序** 特性进行选主。节点谁先写入谁是 Leader；Leader 宕机则删除目录，节点重新竞争。
 
   <img src="pictures\image-20201203192226471.png" alt="image-20201203192226471" style="zoom:80%;" />
 
-  > Zookeeper 是 **CP**，用在对 **数据一致性要求高** 的场景，不能保证每次服务请求的可用性。
+  > Zookeeper 是 **CP**，用在对 **数据一致性要求高** 的场景，**不能保证每次服务请求的可用性**。
   >
   > Zookeeper **自己的**集群 基于 **Zab** 协议。 
 
@@ -272,8 +271,7 @@
 
 > 即：如何防止消息丢失问题
 
-+ 消费端：关闭 **拉取消息后 offset 自动提交**，改成 **处理完消息后** 手动提交offset，再自行解决幂等
-
-+ 生产端：设置 **request.required.acks = -1**, 保证数据在集群中强一致，如果失败则不断重试 **message.send.max.retries = bigint** 
 + Broker端：开启 **Partiton 副本**冗余，即 **min.insync.replicas > 1**，防止宕机数据丢失
++ 消费端：关闭 **拉取消息后 offset 自动提交**，改成 **处理完消息后** 手动提交offset，再自行解决幂等
++ 生产端：设置 **request.required.acks = -1**, 保证数据在集群中强一致，如果失败则不断重试 **message.send.max.retries = bigint** 
 
