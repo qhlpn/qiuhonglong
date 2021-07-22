@@ -106,11 +106,54 @@ typedef struct redisObject {
 
 + **String** ：Int / SDS    【KV缓存、计数】
 + **List** ：ZipList / LinkedList    【消息队列】
-+ **Hash** ： ZipList / HashTable    【关系型数据库表】 
++ **Hash(Map)** ： ZipList / HashTable    【关系型数据库表】 
 + **Set** ：IntSet / HashTable    【交集】
 + **ZSet** ：ZipList / SkipList    【排行榜】
 
-> 操作指令：help @redisObject
+
+
+### Redis 操作指令
+
++ **key**
+
+  | 命令                 | 说明             |
+  | -------------------- | ---------------- |
+  | keys pattern         | 查找键           |
+  | exists key [key ...] | 查询键是否存在   |
+  | del key [key ...]    | 删除键           |
+  | type key             | 查询键类型       |
+  | move key db          | 移动键           |
+  | ttl key              | 查询键的生命周期 |
+  | expire key seconds   | 设置过期时间     |
+  | persist key          | 设置永不过期     |
+  | rename key newkey    | 更改键名称       |
+
++ **String**
+  | 命令                                                         | 说明                                                         |
+  | ------------------------------------------------------------ | ------------------------------------------------------------ |
+  | set key value [EX seconds] [PX milliseconds] [NX\|XX]<br />mset key value [key value ...] | 存放键值 <br />nx：如果key不存在则建立，xx：如果key存在则修改其值 |
+  | get key<br />mget key [key ...]                              | 获取键值                                                     |
+  | incr/decr key                                                | 值递增 / 递减                                                |
+  
++ **Set**
+
+  | 命令                         | 说明                 |
+  | ---------------------------- | -------------------- |
+  | sadd key member [member ...] | 添加集合元素         |
+  | srem key member [member ...] | 删除集合元素         |
+  | smembers key                 | 获取所有元素         |
+  | sismember key member         | 判断集合是否存在元素 |
+  | scard key                    | 获取集合元素个数     |
+  
++ **Hash(Map)**
+
+  | 命令                                                         | 说明             |
+  | ------------------------------------------------------------ | ---------------- |
+  | hset key field value <br />hmset key field value [field value ...]<br />hsetnx key field value | 存放键值         |
+  | hget key field<br />hmget key field [field ...]              | 获取键值         |
+  | hgetall key<br />hkeys key<br />hvals key                    | 获取所有键值     |
+  | hexists key field                                            | 判断字段是否存在 |
+  | hdel key field [field ...]                                   | 删除字段         |
 
 
 

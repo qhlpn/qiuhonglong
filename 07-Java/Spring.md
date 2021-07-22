@@ -303,19 +303,20 @@ public class AopController {
 
   **事务传播行为**
 
-  1. **支持当前已存在事务：**
+  1. **当前已存在事务优先**
      + **TransactionDefinition.PROPAGATION_REQUIRED：**如果当前存在事务，则加入该事务；如果当前没有事务，则创建一个新的事务**（99%）**
      + **TransactionDefinition.PROPAGATION_SUPPORTS：** 如果当前存在事务，则加入该事务；如果当前没有事务，则以非事务的方式继续运行
      + **TransactionDefinition.PROPAGATION_MANDATORY：** 如果当前存在事务，则加入该事务；如果当前没有事务，则抛出异常。（mandatory：强制性）
-  2. **不支持当前已存在事务**
+  2. **当前已存在事务次之**
      + **TransactionDefinition.PROPAGATION_REQUIRES_NEW：** 创建一个新的事务，如果当前存在事务，则把当前事务挂起
      + **TransactionDefinition.PROPAGATION_NOT_SUPPORTED：** 以非事务方式运行，如果当前存在事务，则把当前事务挂起
      + **TransactionDefinition.PROPAGATION_NEVER：** 以非事务方式运行，如果当前存在事务，则抛出异常
-
+3. **嵌套执行  PROPAGATION_NESTED：**内层事务依赖于外层事务。外层事务失败时，会回滚内层事务所做的动作。而内层事务操作失败并不会引起外层事务的回滚。 
   
 
-  **@Transactional(rollbackFor = Exception.class)**
-
+  
+**@Transactional(rollbackFor = Exception.class)**
+  
   在 `@Transactional` 注解中如果不配置 `rollbackFor` 属性，那么事务只会在遇到 `RuntimeException` 的时候才会回滚,加上 `rollbackFor=Exception.class`，可以让事务在遇到非运行时异常时也回滚。
 
 

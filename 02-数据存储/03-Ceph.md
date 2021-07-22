@@ -792,5 +792,3 @@ ceph osd map {pool-name} {block_name_prefix}.000000000000423 # object 映射到 
 |            |                                                              |
 | Stale      | 未刷新态。 PG 存储的所有 OSD 都挂掉（单个挂掉可转移）；或者 Mon 没有检测到 OSD Primary 统计信息（网络抖动） |
 | Down       | 宕机态。当前剩余在线的 OSD 不足以完成数据修复                |
-
-#### 3.7 
