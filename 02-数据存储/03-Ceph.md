@@ -771,7 +771,11 @@ ceph osd map {pool-name} {block_name_prefix}.000000000000423 # object 映射到 
 #### 3.6 place group
 
 > https://blog.csdn.net/weixin_44389885/article/details/86621686
+>
+> https://blog.csdn.net/u014706515/article/details/100586053
+>
 > 指的是 pg 的状态（如osd挂了，则其上面的pg改变状态） pg:osd = 1:n
+>
 > 正常状态：100% active + clean
 
 | 状态       | 描述                                                         |

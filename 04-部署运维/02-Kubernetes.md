@@ -430,7 +430,7 @@ Pod 为 组内容器 提供两种共享资源，包括 网络和存储：
     initContainers: [属性类似于containers]        
   
     # Pod的重启策略
-    restartPolicy: [Always | Never | OnFailure]  
+    restartPolicy: [Always | Never | OnFailure]
     
     # Pod调度策略
     # 方式一：定向调度 
@@ -516,15 +516,15 @@ Pod 为 组内容器 提供两种共享资源，包括 网络和存储：
 
   ``` 
   Pod 终止过程
-  1. 用户向API Server发送删除Pod对象的命令
-  2. API Server中的Pod对象信息会随着时间的推移而更新，在宽限期内（默认30s），Pod被视为dead
-  3. 将Pod标记为terminating状态
-  4. kubelet在监控到Pod对象转为terminating状态的同时，启动Pod关闭过程
-  5. controller监控到Pod对象的关闭行为时，将其从所有匹配到此端点的service资源的端点列表中移除
-  6. 如果当前Pod对象定义了preStop钩子处理器，则在其标记为terminating后会以同步的方式启动执行
-  7. Pod对象中的容器进程收到停止信号
-  8. 宽限期结束后，如果Pod中还存在运行的进程，那么Pod对象会收到立即终止的信号
-  9. kubectl请求API Server将此Pod资源的宽限期设置为0从而完成删除操作，此时Pod对于用户已经不可用了
+      1. 用户向API Server发送删除Pod对象的命令
+      2. API Server中的Pod对象信息会随着时间的推移而更新，在宽限期内（默认30s），Pod被视为dead
+      3. 将Pod标记为terminating状态
+      4. kubelet在监控到Pod对象转为terminating状态的同时，启动Pod关闭过程
+      5. controller监控到Pod对象的关闭行为时，将其从所有匹配到此端点的service资源的端点列表中移除
+      6. 如果当前Pod对象定义了preStop钩子处理器，则在其标记为terminating后会以同步的方式启动执行
+      7. Pod对象中的容器进程收到停止信号
+      8. 宽限期结束后，如果Pod中还存在运行的进程，那么Pod对象会收到立即终止的信号
+      9. kubectl请求API Server将此Pod资源的宽限期设置为0从而完成删除操作，此时Pod对于用户已经不可用了
   ```
 
   
@@ -1034,6 +1034,53 @@ Service 解决 Deployment 管理的 Pod IP 动态变化问题
               serviceName: tomcat-service
               servicePort: 8080
     ```
+
+
+
++ **Network Policy**
+
+  作用：网络隔离。定制网络流量 **进出 / 流出** Pod的规则，其采用的是白名单模式，符合规则的通过，不符合规则的拒绝。
+
+  ``` yaml
+  apiVersion: networking.k8s.io/v1
+  kind: NetworkPolicy
+  metadata:
+    name: network-policy
+    namespace: default
+  spec:
+    podSelector:
+      matchLabels:
+        key: value   # Pod 选择器
+    policyTypes:
+    - Ingress    # 进入 Pod 的流量规则
+    - Egress     # 流出 Pod 的流量规则
+    ingress:
+    - from:
+      - ipBlock:
+          cidr: 172.17.0.0/16
+          except:
+          - 172.17.1.0/24
+      - namespaceSelector:
+          matchLabels:
+            project: myproject
+      - podSelector:
+          matchLabels:
+            role: frontend
+      ports:
+      - protocol: TCP
+        port: 6379
+    egress:
+    - to:
+      - ipBlock:
+          cidr: 10.0.0.0/24
+      ports:
+      - protocol: TCP
+        port: 5978
+  ```
+
+  
+
+
 
 
 

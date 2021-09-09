@@ -268,6 +268,20 @@ Server层:
 ## 2. MySQL 日志模块
 
 > 日志模块实现 **crash-safe**，包括 **redolog**  **binlog**  **undolog**  
+>
+> https://icyfenix.cn/architect-perspective/general-architecture/transaction/local.html
+
+<img src="pictures/image-20210909172033914.png" alt="image-20210909172033914" style="zoom: 33%;" />
+
+> 存在的三个问题：
+>
+> 1. 未提交事务，写入后崩溃
+> 2. 已提交事务，写入前崩溃
+> 3. 在事务提交之后，才允许写入变动数据（即使磁盘 I/O 有足够空闲、即使某个事务修改的数据量非常庞大，占用了大量的内存缓冲区）
+>
+> Commit Logging（redolog） ： 解决 1、2
+>
+> Write-Ahead Logging（undolog） ： 解决 3
 
 ### WAL 思想 (Write-Ahead Logging) 
 

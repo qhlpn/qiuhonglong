@@ -459,7 +459,7 @@ typedef struct redisObject {
 
 ### Redis Cluster
 
-> **集群 + 主从**：Redis cluster 支撑 N 个 Redis master node，每个 master node 可以挂载多个 slave node，实现了高可用和高性能 
+> **集群 + 主从**：Redis cluster **支撑 N 个 Redis master node，每个 master node 可以挂载多个 slave node**，实现了高可用和高性能 
 
 + **数据一致性**
 
