@@ -364,6 +364,7 @@ ansible-playbook site.yml
     4. 删除 osd 服务
     
        ``` shell
+       ceph-volume lvm zap --destroy --osd-id 0 # ceph-volume lvm zap {vg/lv}
        ceph osd out osd.0
        ceph osd down osd.0
        ceph osd purge osd.0 --yes-i-really-mean-it
