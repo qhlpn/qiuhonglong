@@ -220,18 +220,18 @@ ansible-playbook site.yml
      ```yaml
      [global]
      fsid = 4c596c2c-69e3-47c0-a8b0-82ba499ea9ce   # uuid
-     mon initial members = node-1                  # hostname [root@node-1 ~]
-     mon host = 10.190.180.241                     # hostIP
-     public network = 10.190.180.0/23              # 管理网络
-     cluster network = 10.190.180.0/23             # 集群网络
-     auth cluster required = cephx
-     auth service required = cephx
-     auth client required = cephx
-     osd pool default size = 3
-     osd pool default min size = 2
-     osd pool default pg num = 64
-     osd pool default pgp num = 64
-     osd crush chooseleaf type = 0
+     mon_initial_members = node-1                  # hostname [root@node-1 ~]
+     mon_host = 10.190.180.241                     # hostIP
+     public_network = 10.190.180.0/23              # 管理网络
+     cluster_network = 10.190.180.0/23             # 集群网络
+     auth_cluster_required = cephx
+     auth_service_required = cephx
+     auth_client_required = cephx
+     osd_pool_default_size = 3
+     osd_pool_default_min_size = 1
+     osd_pool_default_pg_num = 64
+     osd_pool_default_pgp_num = 64
+     osd_crush_chooseleaf_type = 0
      ```
 
   2. 配置集群 monmap 信息
@@ -319,12 +319,13 @@ ansible-playbook site.yml
 
      ``` shell
      ceph mgr module enable dashboard
-     ceph config set mgr mgr/dashboard/ssl true
+     ceph config set mgr mgr/dashboard/ssl false
      ceph dashboard create-self-signed-cert
      ceph config set mgr mgr/dashboard/server_addr 0.0.0.0  
      ceph config set mgr mgr/dashboard/server_port 8080 
      ceph config set mgr mgr/dashboard/ssl_server_port 8443 
      ceph dashboard ac-user-create <username> -i <file-containing-password> administrator
+     ceph dashboard ac-user-create <username> <password> administrator
      ```
 
   6. 启动 mgr.prometheus 模块
@@ -398,6 +399,96 @@ ceph daemon osd.0 config [get|set...]
 # 3. ceph.conf 
 vi /etc/ceph/ceph.conf
 ```
+
+``` yaml
+[global]
+fsid = 020a529f-3efc-4b04-9edb-ecb4858ddcea
+mon_host = [v2:192.168.89.54:3300,v1:192.168.89.54:6789],[v2:192.168.89.55:3300,v1:192.168.89.55:6789],[v2:192.168.89.56:3300,v1:192.168.89.56:6789]
+mon_initial_members = E01-P01-DN-001.gd.cn,E01-P01-DN-002.gd.cn,E01-P01-DN-003.gd.cn
+public_network = 192.168.88.0/23
+
+max_open_files = 1310720
+mon_max_pg_per_osd = 512
+osd_crush_update_on_start = false
+ms_bind_port_min = 10000
+ms_bind_port_max = 15000
+mon_osd_down_out_subtree_limit = host
+
+#----------------------- RGW -----------------------
+rgw_frontends = "beast port=7480 num_threads=1024 enable_keep_alive=yes keep_alive_timeout_ms=120000"
+rgw_bucket_index_max_aio = 64
+rgw_dynamic_resharding = false
+rgw_num_rados_handles = 16
+rgw_thread_pool_size = 1024
+rgw_cache_enabled = true
+rgw_max_chunk_size = 4194304
+rgw_cache_lru_size = 100000
+rgw_enable_gc_threads = true
+rgw_gc_max_objs = 1024
+rgw_gc_obj_min_wait = 0
+rgw_gc_processor_max_time = 3600
+rgw_gc_processor_period = 30
+rgw_gc_max_concurrent_io = 300
+rgw_gc_max_trim_chunk = 256
+rgw_enable_ops_log = false
+rgw_enable_usage_log = true
+rgw_usage_log_tick_interval = 1
+rgw_usage_log_flush_threshold = 1
+rgw_usage_max_shards = 32
+rgw_usage_max_user_shards = 1
+rgw_zone =
+#---------------------------------------------------
+mon_allow_pool_delete = false
+[osd]
+osd_memory_target = 1073741824
+bluestore_min_alloc_size_hdd = 16384
+bluestore_max_blob_size_hdd = 524288
+bluefs_allocator = bitmap
+bluestore_allocator = bitmap
+bluestore_prefer_deferred_size_hdd = 2048
+bluestore_cache_size_hdd = 1073741824
+bluestore_deferred_batch_ops_hdd = 0
+bluestore_cache_meta_ratio = 0.8
+bluestore_cache_kv_ratio = 0.2
+bluestore_rocksdb_options = compression=kNoCompression,max_write_buffer_number=6,min_write_buffer_number_to_merge=1,write_buffer_size=67108864,target_file_size_base=134217728,max_bytes_for_level_base=73400320,max_background_flushes=32,max_background_compactions=32,use_direct_reads=true,use_direct_io_for_flush_and_compaction=true
+
+osd_max_write_size = 512
+osd_op_num_shards = 8
+osd_op_num_threads_per_shard = 8
+osd_recovery_max_active = 1
+osd_recovery_sleep = 0.0
+osd_recovery_sleep_hdd = 0.1
+osd_recovery_sleep_ssd = 0.0
+osd_recovery_max_chunk = 33554432
+osd_recovery_op_priority = 32
+osd_recovery_max_single_start = 1
+osd_recovery_thread_timeout = 120
+osd_recovery_max_omap_entries_per_chunk = 131072
+osd_max_backfills = 1
+osd_backfill_scan_min = 256
+osd_backfill_scan_max = 1024
+osd_backfill_retry_interval = 10.0
+
+osd_max_scrubs = 1
+osd_scrub_auto_repair = true
+osd_scrub_chunk_max = 1
+osd_scrub_chunk_min = 1
+osd_scrub_max_interval = 2592000
+osd_scrub_min_interval = 0
+osd_scrub_sleep = 1
+osd_scrub_begin_hour = 0
+osd_scrub_end_hour = 24
+osd_scrub_interval_randomize_ratio = 1.0
+osd_deep_scrub_interval = 604800
+osd_deep_scrub_randomize_ratio = 1.0
+osd_scrub_load_threshold = 40.0
+
+osd_client_watch_timeout = 15
+osd_heartbeat_grace = 20
+osd_heartbeat_interval = 5
+```
+
+
 
 
 
@@ -552,6 +643,10 @@ vi /etc/ceph/ceph.conf
 
   ```shell
   ceph osd pool create poolName 64 64   -- replicated[default] 副本 | erasure 纠删码
+  
+  PGs = ((total_number_of_OSD * 100) / max_replication_count) / pool_count
+  结算的结果往上取靠近2的N次方的值。比如总共OSD数量是160，复制份数3，pool数量也是3，那么每个pool分配的PG数量就是2048
+  
   ceph osd pool application enable poolName [rbd | rgw | cephfs] -- 启用应用类型
   ceph osd lspools
   ceph osd pool get poolName pg_num    
@@ -568,6 +663,9 @@ vi /etc/ceph/ceph.conf
   rbd ls {poolname}
   rbd info {pool-name}/{image-name}
   rbd rm {pool-name}/{image-name}
+  rbd status {pool-name}/{image-name}  -> watcher
+  ceph osd blacklist add watcher
+  ceph osd blacklist rm watcher
   
   # 扩容分三步：底层磁盘扩容、分区扩容（可选）、文件系统扩容
   rbd resize {pool-name}/{image-name} --size 20G  # 磁盘扩容 fdisk -l
@@ -673,6 +771,8 @@ ceph osd map {pool-name} {block_name_prefix}.000000000000423 # object 映射到 
 #### 2.8 crush map
 
 > https://blog.csdn.net/weillee9000/article/details/102842642
+>
+> https://www.dovefi.com/post/%E6%B7%B1%E5%85%A5%E7%90%86%E8%A7%A3crush1%E7%90%86%E8%A7%A3crush_map%E6%96%87%E4%BB%B6/
 
 
 
@@ -681,6 +781,68 @@ ceph osd map {pool-name} {block_name_prefix}.000000000000423 # object 映射到 
 > cd /var/log/ceph/
 
 
+
+#### 2.10 fio 压测
+
+> https://www.jianshu.com/p/ee6ee9ca37e5
+>
+> https://blog.csdn.net/qq_42776455/article/details/108793391
+>
+> https://www.cnblogs.com/raykuan/p/6914748.html
+
++ 顺序写（测吞吐量）
+
+  ``` shell
+  fio -filename= -direct=1 -iodepth 1 -thread -rw=write -ioengine=psync -bs=1M -size=200m -numjobs=30 -runtime=60 -group_reporting -name=mytest
+  ```
+
++ 顺序读（测吞吐量）
+
+  ``` shell
+  fio -filename= -direct=1 -iodepth 1 -thread -rw=read -ioengine=psync -bs=1M -size=1G -numjobs=30 -runtime=60 -group_reporting -name=mytest
+  ```
+
++ 混合顺序读写（测吞吐量）
+
+  ``` shell
+  fio -filename= -direct=1 -iodepth 1 -thread -rw=rw -rwmixread=50 -ioengine=psync -bs=1M -size=1G -numjobs=30 -runtime=60 -group_reporting -name=mytest
+  ```
+
++ 随机写（测IOPS）
+
+  ``` shell
+  fio -filename= -direct=1 -iodepth 1 -thread -rw=randwrite -ioengine=psync -bs=4k -size=200m -numjobs=30 -runtime=60 -group_reporting -name=mytest
+  ```
+
++ 随机读（测IOPS）
+
+  ``` shell
+  fio -filename= -direct=1 -iodepth 1 -thread -rw=randread -ioengine=psync -bs=4k -size=1G -numjobs=30 -runtime=60 -group_reporting -name=mytest
+  ```
+
++ 混合随机读写（测IOPS）
+
+  ``` shell
+  fio -filename= -direct=1 -iodepth 1 -thread -rw=randrw -rwmixread=50 -ioengine=psync -bs=1M -size=1G -numjobs=30 -runtime=60 -group_reporting -name=mytest
+  ```
+
+> 1. 测试随机读写时，numjobs从8开始，12..16..20..逐渐往上加，直到IOPS不再上升
+> 2. 测试顺序读写时，numjobs从1开始，2..3..4..往上加，基本思路与以上描述一致
+> 3. 测试随机读写时要关注IOPS，不要关注IO吞吐；测试顺序读写时要关注IO吞吐，不要关注IOPS
+
+#### 2.11 qos
+
+QoS 限制、存储池扩容、存储规格及存储策略配置
+
+ceph
+
+​	At the image level: `rbd config image set $pool/$image rbd_qos_iops_limit 10`
+
+​	At the pool level: `rbd config pool set $pool rbd_qos_iops_limit 10`
+
+cgroup
+
+http://www.manongjc.com/article/90348.html
 
 
 
@@ -761,10 +923,14 @@ ceph osd map {pool-name} {block_name_prefix}.000000000000423 # object 映射到 
 
 <img src=".\pictures\image-20210204143506575.png" alt="image-20210204143506575" style="zoom: 50%;" />
 
-> ceph通过cluster_map存储分布式集群的结构拓扑，集群物理结构定义为树形结构，默认10种层级，每个**中间节点**称为**bucket**，**叶子节点**一定是**osd**
+> ceph通过cluster_map存储分布式集群的结构拓扑，集群物理结构定义为树形结构，默认10种层级。
+>
+> 每一个最末端的的物理设备，也叫叶子节点就叫device，比如osd。
+>
+> 所有的中间节点就叫做bucket，bucket可以是一些devices的集合也可以是低一级的buckets的集合。
 
 > 若以host为单位，则不同副本将落到不同host，如host0，再落到dev0 dev1
->
+
 > 若以rack为单位，则不同副本将落到不同rack，如rack0，再落到dev0 ... 8
 
 

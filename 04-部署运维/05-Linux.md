@@ -228,7 +228,7 @@
   # p : 显示
   # -n 仅显示script处理后的结果
   $ cat /etc/passwd | sed '5,7p' -n 
-  $ cat /etc/passwd | sed '/root/p' # 搜索并打印
+  $ cat /etc/passwd | sed '/root/p' -n  # 搜索并打印
   # s : 替换 
   $ echo "hello world" | sed 's/world/timi/gi' # 搜索并替换 sed 's/要被取代的字串/新的字串/gi' g全局 i忽略大小写
   # d : 删除

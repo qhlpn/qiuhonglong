@@ -303,40 +303,40 @@ ansibel具有幂等性，多次playbook执行后的主机状态应相同
       var1: httpd
       var2: nginx
     
-    cat var.yml
-    - hosts: web
-      remote_user: root
-      vars_files:      # 🍟
-        - vars.yml
+      cat var.yml
+      - hosts: web
+        remote_user: root
+        vars_files:      # 🍟
+          - vars.yml
       tasks:
         - name: create httpd log
           file: name=/app/{{ var1 }}.log state=touch
         - name: create nginx log
         file: name=/app/{{ var2 }}.log state=touch
-          
-  优先级：
-    https://www.cnblogs.com/mauricewei/p/10054300.html
+    
+    优先级：
+      https://www.cnblogs.com/mauricewei/p/10054300.html
     ```
-  
+
   + **templates**
-  
+
     ```
     文本文件，嵌套有脚本（使用模板编程语言编写） 借助模板生成真正的文件
     Jinja2语言，使用字面量，有下面形式
-        字符串：使用单引号或双引号
-        数字：整数，浮点数
-        列表：[item1, item2, ...]
-        元组：(item1, item2, ...)
-        字典：{key1:value1, key2:value2, ...}
-        布尔型：true/false
-  算术运算：+, -, *, /, //, %, **
-    比较操作：==, !=, >, >=, <, <=
-  逻辑运算：and，or，not
-    流表达式：For，If，When
+          字符串：使用单引号或双引号
+          数字：整数，浮点数
+          列表：[item1, item2, ...]
+          元组：(item1, item2, ...)
+          字典：{key1:value1, key2:value2, ...}
+          布尔型：true/false
+    算术运算：+, -, *, /, //, %, **
+      比较操作：==, !=, >, >=, <, <=
+    逻辑运算：and，or，not
+      流表达式：For，If，When
     ```
-  
+
   + **when**
-  
+
     ```
     条件测试:如果需要根据变量、facts或此前任务的执行结果来做为某task执行与否的前提时要用到条件测试,
     通过when语句实现，在task中使用，jinja2的语法格式
@@ -348,7 +348,7 @@ ansibel具有幂等性，多次playbook执行后的主机状态应相同
       - name: "shutdown RedHat flavored systems"
         command: /sbin/shutdown -h now
         when: ansible_os_family == "RedHat"  当系统属于红帽系列,执行command模块 
-     
+    
     when语句中还可以使用Jinja2的大多"filter"，
     例如要忽略此前某语句的错误并基于其结果(failed或者success)运行后面指定的语句，
     可使用类似如下形式：
@@ -360,15 +360,15 @@ ansibel具有幂等性，多次playbook执行后的主机状态应相同
         when: result|failed
       - command: /bin/something_else
         when: result|success
-    - command: /bin/still/something_else
+      - command: /bin/still/something_else
         when: result|skipped
-  
+    
     此外，when语句中还可以使用facts或playbook中定义的变量
     ```
-  
+
   + **with_items**
-  
-    ```
+
+    ``` 
     循环：当有需要重复性执行的任务时，可以使用迭代机制
     对迭代项的引用，固定变量名为 item
     列表格式可以是字符串或者是字典
@@ -381,14 +381,15 @@ ansibel具有幂等性，多次playbook执行后的主机状态应相同
         - testuser2
     
     上面语句的功能等同于下面的语句：
-  - name: add user testuser1
+    - name: add user testuser1
       user: name=testuser1 state=present groups=wheel
-  - name: add user testuser2
+    - name: add user testuser2
       user: name=testuser2 state=present groups=wheel
+    
     ```
-  
+
   + **roles**
-  
+
     ```
     roles 通过分别将变量、文件、任务、模板及处理器放置于单独的目录，用于层次性、结构化地组织 playbook，通过 include 引入
     https://www.wumingx.com/linux/ansible-roles.html

@@ -256,8 +256,9 @@ scrape_configs:
   **job**：node
 
 + **instance** 1：1.2.3.4:9100
-  + **instance** 2：5.6.7.8:9100
   
++ **instance** 2：5.6.7.8:9100
+
   ```yaml
   scrape_configs:
     - job_name: linux
@@ -275,6 +276,8 @@ scrape_configs:
   ```
 
   > 如果在抓取的数据中已经存在这些标签中的任何一个，则行为取决于honor_labels配置选项
+
+
 
 ### Alertmanager
 
@@ -299,13 +302,18 @@ scrape_configs:
         summary: High request latency on {{ $labels.instance }}   # 描述告警的概要信息
         description: current value: {{ $value }}  # 描述告警的详细信息
   ```
-
-  ```yaml
+  
+  ``` yaml
   # /etc/prometheus/prometheus.yaml
   rule_files:
     [ - <filepath_glob> ... ] # 规则文件路径
   global:
     [ evaluation_interval: <duration> | default = 1m ] # 扫描间隔
+  alerting:
+    alertmanager:
+      - static_configs:
+          - targets:     
+              - # alertmanager 服务
   ```
 
 + **Alertmanager**

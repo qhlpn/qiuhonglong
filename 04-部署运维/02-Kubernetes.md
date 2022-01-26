@@ -1,6 +1,6 @@
 
 
-### Kubernetes 概念
+### 概念
 
 Kubernetes 是自动化容器编排的开源平台
 
@@ -267,7 +267,7 @@ watch kubectl get pods -l app=nginx
 
 
 
-### Kubernetes 组件
+### 组件
 
 <img src="https://kuboard.cn/assets/img/image-20190910232615991.12423fd9.png" alt="Kubernetes教程：控制器概念结构" style="zoom:45%;" />
 
@@ -1637,9 +1637,7 @@ API Server是访问和管理资源对象的唯一入口。任何一个请求访�
 
   
 
-
-
-###  Kubernetes 资源
+###  资源
 
 #### kubectl 命令
 
@@ -1742,3 +1740,313 @@ kubectl api-resources   # kubernetes中所有的内容都抽象为资源
 
 3. 声明式 + 配置： kubectl apply -f nginx-pod.yaml
 
+
+
+### CRD
+
+#### 运行模式
+
+<img src="pictures/image-20220111170316895.png" alt="image-20220111170316895" style="zoom: 80%;" />
+
+CR 的变化 会通过 Informer 存入队列 WorkQueue，在 Controller 中消费队列的数据做出响应，响应的代码是业务逻辑
+
+
+
+#### operator-sdk
+
++ **原理图**
+
+  <img src="pictures/image-20220114145118617.png" alt="image-20220114145118617" style="zoom:80%;" />
+
+  + https://xie.infoq.cn/article/e3345fdc1c7390a779231e799
+
+  + **GVK = Group + Version + Kind**：apps/v1/deployments
+
+  + **GVR = Group + Version + Resource**：apps/v1/sample（例如某个 deployment 的 name 是 sample）
+
+  + **Scheme**：存储 GVK 和 Go Type 的映射关系
+
+  + **Manager**：Controller Runtime 抽象的最外层管理对象，负责管理内部的 Controller，Cache，Client 等对象。
+
+  + **Cache**：负责管理 GVK 对应的 Share Informer
+
+  + **Client**：Reconciler 对资源的创建/删除/更新操作都是通过该对象去操作
+
+  + **Controller**：创建有带限速功能的 Queue，以及该 Controller 关注 GVK 的 Watcher，一个 Controller 可以关注很多 GVK
+
+  + **Reconciler**：接收 Controller 发送给自己的 GVR 事件，然后从 Cache 中读取出 GVR 的当前状态，经过自己的控制逻辑，通过 Client 向 Kubernetes APIServer 更新 GVR 资源。**开发者只需要在 Reconciler 实现自己的控制逻辑** 。
+
+    
+
++ **操作记录**
+
+  + 官方文档：https://sdk.operatorframework.io/docs/building-operators/golang/tutorial/
+  + 博客文档：https://www.qikqiak.com/post/k8s-operator-101/           https://zhuanlan.zhihu.com/p/389659932
+
+  ``` shell
+  # install go  https://zhuanlan.zhihu.com/p/389659932
+  
+  mkdir crd-controller    # dir in goPath  https://www.cnblogs.com/zhaof/p/7906722.html
+  cd crd-controller/
+  
+  go mod init demo
+  
+  operator-sdk init --domain=demo
+  operator-sdk create api  --group learning --version v1 --kind AppService --controller=true --resource=true
+  
+  edit api/v1/appservice_types.go
+  
+  go mod tidy
+  make generate
+  make manifests
+  
+  edit controllers/appservice_controller.go
+  
+  make manifests
+  
+  make install run    # local
+  # make deploy       # as deployment  make undeploy  
+  
+  kubectl apply -f config/crd/bases/learning.demo_appservices.yaml
+  edit config/samples/learning_v1_appservice.yaml
+  kubectl apply -f config/samples/learning_v1_appservice.yaml
+  ```
+
+
+
+
+
+### CSI
+
+https://kubernetes-csi.github.io/docs/introduction.html
+
+https://github.com/container-storage-interface/spec/blob/master/spec.md#rpc-interface
+
+https://mritd.com/2020/08/19/how-to-write-a-csi-driver-for-kubernetes/
+
+#### Sidecar
+
++ [external-provisioner](https://kubernetes-csi.github.io/docs/external-provisioner.html)：watch pvc object，calls ControllerCreateVolume
++ [external-attacher](https://kubernetes-csi.github.io/docs/external-attacher.html)：watch VolumeAttachment object，call Controller[Publish|Unpublish]Volume
++ [external-snapshotter](https://kubernetes-csi.github.io/docs/external-snapshotter.html)：watch VolumeSnapshotContent object，call 
++ [external-resizer](https://kubernetes-csi.github.io/docs/external-resizer.html)：watch pvc object，calls ControllerExpandVolume
++ [node-driver-registrar](https://kubernetes-csi.github.io/docs/node-driver-registrar.html)：fetches driver information (using NodeGetInfo) from a CSI endpoint and registers it with the kubelet
++ [livenessprobe](https://kubernetes-csi.github.io/docs/livenessprobe.html)：monitors the health of the CSI driver and reports
+
+CSI 插件开发是面向 Sidecar Containers 的 gRPC 开发。
+
+Sidecar Containers 一般会和我们自己开发的 CSI 驱动程序在同一个 Pod 中启动。
+
+Sidecar Containers Watch API 中 CSI 相关 Object 的变动，接着通过本地 unix 套接字调用我们编写的 CSI 驱动。
+
+
+
+
+
+#### 处理流程
+
+https://mp.weixin.qq.com/s/A9xWKMmrxPyOEiCs_sicYQ
+
+https://mp.weixin.qq.com/s/jpopq16BOA_vrnLmejwEdQ
+
++ **Provisioning and Deleting：**实现与外部存储供应商协调卷的创建/删除处理，即 CreateVolume 和 DeleteVolume。如执行 rbd create / rbd rm 
+
++ **Attaching and Detaching：**实现将外部存储供应商提供好的卷设备挂载到本地或者从本地卸载，即 ControllerPublishVolume 和 ControllerUnpublishVolume。 如执行 rbd device map / rbd device unmap
+
++ **Mount and Umount：**实现将存储挂载到Pod容器或者从Pod解挂，即 NodeStageVolume、NodePublishVolume 等。
+
+  可以实现一个 PV 挂载在多个 pod 中使用
+
+  NodeStageVolume 就是先 mount 到一个 globalmount 目录（/var/lib/kubelet/plugins/kubernetes.io/csi/pv/pvc-bcfe33ed-e822-4b0e-954a-0f5c0468525e/globalmount）
+
+  NodePublishVolume 再通过 mount bind 到 pod 的目录（/var/lib/kubelet/pods/xxx/volumes/kubernetes.io-csi/pvc-bcfe33ed-e822-4b0e-954a-0f5c0468525e/mount/hello-world）
+
+  
+
+
+
+loop device   https://blog.csdn.net/lengye7/article/details/80247437
+
+
+
+查看文件系统 https://www.linuxprobe.com/partition-file-system.html
+
+overlay
+
+
+
+
+
+
+
+#### gRPC Server
+
+Sidecar Containers Watch API 中 CSI 相关 Object 的变动，接着通过本地 unix 套接字调用我们编写的 CSI gRPC Server
+
++ **Identity Server：**显示 CSI 插件所支持的能力信息
++ **Node Server：**Mount and Umount
++ **Controller Server：**Provisioning and Deleting、Attaching and Detaching
+
+
+
+### 网络
+
+**如果让你来设计网络**
+
+https://mp.weixin.qq.com/s/jiPMUk6zUdOY6eKxAjNDbQ
+
+**电脑视角：**
+
+- 首先我要知道我的 IP 以及对方的 IP
+- 通过子网掩码判断我们是否在同一个子网
+- 在同一个子网就通过 arp 获取对方 mac 地址直接扔出去
+- 不在同一个子网就通过 arp 获取默认网关的 mac 地址直接扔出去
+
+**交换机视角：**
+
+- 我收到的数据包必须有目标 MAC 地址
+- 通过 MAC 地址表查映射关系
+- 查到了就按照映射关系从我的指定端口发出去
+- 查不到就所有端口都发出去
+
+**路由器视角：**
+
+- 我收到的数据包必须有目标 IP 地址
+- 通过路由表查映射关系
+- 查到了就按照映射关系从我的指定端口发出去（不在任何一个子网范围，走其路由器的默认网关也是查到了）
+- 查不到则返回一个路由不可达的数据包
+
+**涉及到的三张表分别是**
+
+- 交换机中有 **MAC 地址**表用于映射 MAC 地址和它的端口
+- 路由器中有**路由表**用于映射 IP 地址(段)和它的端口
+- 电脑和路由器中都有 **arp 缓存表**用于缓存 IP 和 MAC 地址的映射关系
+
+**这三张表是怎么来的**
+
+- MAC 地址表是通过以太网内各节点之间不断通过交换机通信，不断完善起来的。
+- 路由表是各种路由算法 + 人工配置逐步完善起来的。
+- arp 缓存表是不断通过 arp 协议的请求逐步完善起来的。
+
+
+
+**VLAN**
+https://cloud.tencent.com/developer/article/1412795
+
+
+
+**VXLAN**
+https://support.huawei.com/enterprise/zh/doc/EDOC1100087027
+https://www.cnblogs.com/bakari/p/11131268.html
+
+
+
+**tap/tun**
+
+https://segmentfault.com/a/1190000009249039
+
+**veth**
+https://segmentfault.com/a/1190000009251098
+
+**bridge**
+
+https://segmentfault.com/a/1190000009491002   
+
+
+
+**虚拟机**（tun/tap + bri）
+
+<img src="pictures/image-20220126113030464.png" alt="image-20220126113030464" style="zoom:80%;" />
+
+**docker**（veth + bri）
+
+<img src="pictures/image-20220126112934976.png" alt="image-20220126112934976" style="zoom:80%;" />
+
+
+
+
+
+**docker**
+
+Docker使用了Linux的Namespaces技术来进行资源隔离，如PID Namespace隔离进程，Mount Namespace隔离文件系统，Network Namespace隔离网络（包括网卡、路由、Iptable规则）等。
+
+https://www.cnblogs.com/gispathfinder/p/5871043.html
+
++ **host模式**
+
+  容器将不会获得一个独立的Network Namespace，而是和宿主机共用一个Network Namespace，使用宿主机的IP和端口
+
++ **container模式**
+
+  新创建的容器和已经存在的一个容器共享一个Network Namespace
+
++ **none模式**
+
+  容器拥有自己的Network Namespace，但是，并不为Docker容器进行任何网络配置，需要手动添加
+
++ **bridge模式**
+
+  为每个容器分配Network Namespace、设置IP等，并将主机上的Docker容器共同连接到一个虚拟网桥上
+
+
+
+**K8s**
+
+Kubernetes引入的网络模型提出了下列基本要求。只要满足了这些要求，即可成为一个K8s网络方案供应商。
+
++ Pod都有自己单独的IP地址，Pod内部的所有容器共享Pod的IP地址，且可以相互自由通信
++ Node上的容器可以使用Pod的IP地址和其它Node上面的容器通信，且不需要通过NAT
++ 如果Pod使用宿主机网络环境，那么跨Node的容器间可以使用宿主机IP地址进行通信，且不需要通过NAT
++ Node上面的agent（比如system daemon, kubelet等）可以使用IP地址和位于该Node上面的所有容器通信，且不需要通过NAT
++ Pod之间容器通信所涉及到的隔离问题，通过 NetworkPolicy CR解决
+
+要求说明了
+
++ 不能NAT意味着Pod自己看自己的IP和别人(宿主机上面的agent或者其它Pod)看到自己的IP是一样的，对，一眼看穿、看懂对方的那种。而与此对应的是，如有NAT在捣鬼的话，当企业内部的机器访问躲在Nginx后面的服务时，二者相互看不清对方的本来面目。
++ 容器之间IP互通，也就间接要求了宿主机之间是三层可达的。为什么呢？如果是宿主机环境是二层网络，那么天生就是可实现三层可达的，但如果二层不通的话，也需要实现三层可达，不然从一个Pod发出的数据不是被憋死在宿主机上面了吗？
+
++ 二层可达表示同个局域网内，不可达则表示位于不同局域网；三层可达则可位于不同局域网，经过路由器到达
+
+
+
+**K8s扁平网络模型：**
+
+<img src="pictures/640.webp" alt="图片" style="zoom:80%;" />
+
+
+
+**CNI实现方案**
+
+K8s内建了一个kubenet，它可以支持一些基本的网络连接。但更普遍的使用方式是用第三方的网络方案。只要它满足CNI(Container Network Interface) 规范就可以以插件的方式在K8s环境使用。
+
+CNI插件的种类多种多样，关键的功能有两个：
+
++ IP管理插件，主要负责为Pod分配IP地址，并在Pod被销毁的时候回收IP
+
++ 网络插件，主要负责将Pod插入到K8s网络或从K8s网络删除
+
+
+
+<img src="pictures/640-16431987445622.webp" alt="图片" style="zoom:80%;" />
+
+
+
++ **离开k8s网络，进入宿主机网络阶段**
+
+  + **Overlay networks 模式**
+
+    作为一般规则，当K8s网络的traffic途径宿主机网络中路由规则**不可以被正常路由**的话（比如不同网段），就需要考虑封包（Encapsulation）。典型的封包方案有 Flannel VXLAN 和 Calico IP-in-IP两种。
+
+  + **直接路由 Pod IP 模式**
+
+    作为一般规则，如果K8s网络的traffic途径宿主机网络中路由规则**可以被正常路由**的话，就可以采用直接路由Pod IP方案，无需封包，性能损失小。Flannel host-gw 和 Calico BGP 使用了这种模式。
+
++ **离开宿主机网络阶段**
+
+  + **要求宿主机二层连通的方案**
+
+    作为一般规则，当K8s网络的traffic离开宿主机时，如果下一跳或者网关是**集群主机**的IP地址，也即dest MAC是集群主机的MAC地址时，就**需要**宿主机环境二层是能直接连通的。
+
+  + **要求宿主机三层连通的方案**
+
+    作为一般规则，当K8s网络的traffic离开宿主机时，如果下一跳或者网关**不是集群主机**的IP地址，就**不需要**二层连通，此时**只要三层IP可达**即可把以太帧路由到终点。
