@@ -11,24 +11,26 @@
 <img src="pictures\image-20201127160901921.png" alt="image-20201127160901921" style="zoom:50%;" />
 
 + **Producer **：生产者
-
 + **Consumer**：消费者
-
 + **Consumer Group**：消费者组。Topic 会被所有 CG 消费到，但同个组内的消费者不会消费同个消息。CG 组可实现消息 **广播（设置每个Consumer有独立的CG）和单播（所有Consumer均放在同个CG内）**
-
 + **Broker**：Kafka 服务器
-
 + **Topic**：主题（逻辑概念），用来区分不同类型的消息，类似于数据库的表
-
 + **Partition**：分区（物理存储），每个 Partition 对应一个目录，里面存储消息文件和索引文件，**分区可并发读写提速**，每个 Partition 分配固定的 Consumer（直至重平衡） 
-
 + **Offset**：偏移量，记录 Group 消费 Partition 所处位置。**可实现Partition 在组内的消费有序**，**不保证主题级别有序性**
-
 + **Replication**：副本，每个 Partition 数据可在**其它** Broker 存有副本，**实现高可用，不支持读写分离（高版本支持）**
-
 + **Record**：消息记录，包括 key value 和 timestamp 字段
 
-  
+
+
+
+### 高性能设计
+
+<img src="pictures/640.webp" alt="图片" style="zoom: 50%;" />
+
++ https://mp.weixin.qq.com/s/kImrkVLE4dtpVnb-Yp479Q
++ https://mp.weixin.qq.com/s/YJFltTP4J5si1Z5SbuMUJw
+
+
 
 ### Producer
 
@@ -112,7 +114,7 @@
   ```
 
   + **消息接收由单个线程跑单个Consumer；消息处理由不同的线程分别对应不同的Worker。**
-**消息接收和消息处理解耦，即 Reactor模型 = IO多路复用 + 事件驱动**
+  **消息接收和消息处理解耦，即 Reactor模型 = IO多路复用 + 事件驱动**
   
   <img src="pictures\image-20201130174408275.png" alt="image-20201130174408275" style="zoom:80%;" />
   

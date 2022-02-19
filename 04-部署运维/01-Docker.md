@@ -128,3 +128,23 @@ RUN mkdir -p $ALOGIC_HOME/alogic-webapps/$KETTY_APP \
 CMD ketty-web.sh start app=$KETTY_APP port=9800 daemon=false version=1.0
 ```
 
+
+
+#### Registry 镜像仓库
+
+```
+配置镜像仓库：https://codeantenna.com/a/Eq8qC51Ooa
+cat /etc/docker/daemon.json
+```
+
+    账号登录管理：https://juejin.cn/post/6991354329189842958
+    vi /root/.docker/config.json
+
+``` 
+K8S使用secret连接仓库拉取镜像：http://docs.kubernetes.org.cn/554.html
+
+
+```
+
+
+
