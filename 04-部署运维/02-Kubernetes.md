@@ -1849,6 +1849,8 @@ https://mp.weixin.qq.com/s/A9xWKMmrxPyOEiCs_sicYQ
 
 https://mp.weixin.qq.com/s/jpopq16BOA_vrnLmejwEdQ
 
+![图片](pictures/640)
+
 + **Provisioning and Deleting：**实现与外部存储供应商协调卷的创建/删除处理，即 CreateVolume 和 DeleteVolume。如执行 rbd create / rbd rm 
 
 + **Attaching and Detaching：**实现将外部存储供应商提供好的卷设备挂载到本地或者从本地卸载，即 ControllerPublishVolume 和 ControllerUnpublishVolume。 如执行 rbd device map / rbd device unmap
@@ -1871,7 +1873,7 @@ loop device   https://blog.csdn.net/lengye7/article/details/80247437
 
 查看文件系统 https://www.linuxprobe.com/partition-file-system.html
 
-overlay
+overlay 文件系统
 
 
 
