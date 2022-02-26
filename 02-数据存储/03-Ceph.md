@@ -139,13 +139,13 @@
 
       ```shell
       cd ceph-ansible/group_vars/
-
+  
       # 根据模板创建文件
       cp mons.yml.sample mons.yml
       cp mgrs.yml.sample mgrs.yml
       cp osds.yml.sample osds.yml
       cp all.yml.sample all.yml
-
+  
       # 配置 all.yml
           ---  
           # 配置 Ceph 源
@@ -185,7 +185,7 @@
               wal_vg: ceph
               db: osd-meta
               db_vg: ceph
-
+  
       # 配置 site.yml
       cd ceph-ansible
       cp site.yml.sample site.yml
@@ -369,8 +369,8 @@ ansible-playbook site.yml
        ceph osd out osd.0
        ceph osd down osd.0
        ceph osd purge osd.0 --yes-i-really-mean-it
-       systemctl stop osd.0
-       systemctl disable osd.0
+       systemctl stop ceph-osd@0
+       systemctl disable ceph-osd@0
        ```
 
 
