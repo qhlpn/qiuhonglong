@@ -99,6 +99,8 @@ cat /proc/meminfo
   >
   > 第5行：虚拟内存总量、虚拟内存空闲量、虚拟内存使用量、已被提前加载的内存量。
 
++ **htop**：一个互动的进程查看器，可以动态观察系统进程状况
+
 + **nice**：用于调整进程的优先级。nice 优先级数字 服务名称
 
   ``` shell
@@ -128,6 +130,8 @@ cat /proc/meminfo
           TX packets 91  bytes 11052 (10.7 KiB)
           TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0
   ```
+
++ **iftop**：用来监控网卡的实时流量（可以指定网段）、反向解析IP、显示端口信息等
 
 + **free**：显示当前系统中内存的使用量信息  free -h
 

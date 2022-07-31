@@ -218,12 +218,13 @@ ansible-playbook site.yml
   1. 创建配置文件 /etc/ceph/ceph.conf
 
      ```yaml
+     cat >> /etc/ceph/ceph.conf << EOF
      [global]
      fsid = 4c596c2c-69e3-47c0-a8b0-82ba499ea9ca
-     mon_initial_members = node-1         
-     mon_host = 192.168.211.3              
-     public_network = 192.168.211.0/24   
-     cluster_network = 192.168.211.0/24   
+     mon_initial_members = node-1, node-2, node-3
+     mon_host = 192.168.211.57, 192.168.211.58, 192.168.211.59
+     public_network = 192.168.211.0/24
+     cluster_network = 192.168.211.0/24
      auth_cluster_required = cephx
      auth_service_required = cephx
      auth_client_required = cephx
@@ -232,12 +233,13 @@ ansible-playbook site.yml
      osd_pool_default_pg_num = 64
      osd_pool_default_pgp_num = 64
      osd_crush_chooseleaf_type = 0
+     EOF
      ```
 
   2. 配置集群 monmap 信息
 
      ```shell
-     monmaptool --create --add node-1 192.168.211.3 --fsid 4c596c2c-69e3-47c0-a8b0-82ba499ea9ca /var/lib/ceph/tmp/monmap
+     monmaptool --create --add node-1 192.168.211.57  --add node-2 192.168.211.58 --add node-3 192.168.211.59 --fsid 4c596c2c-69e3-47c0-a8b0-82ba499ea9ca /var/lib/ceph/tmp/monmap
      ```
 
   3. 配置集群的 client.admin 角色密钥环
@@ -298,51 +300,57 @@ ansible-playbook site.yml
   11. 添加节点
 
       ``` 
-      https://blog.csdn.net/chuan_day/article/details/64929536
+      # 拷贝集群的 
+      /etc/ceph/ceph.conf  
+      /etc/ceph/ceph.client.admin.keyring 
+      /var/lib/ceph/tmp/monmap
+      /var/lib/ceph/tmp/ceph.mon.keyring
+      到部署的主机上
       
-      sudo mkdir /var/lib/ceph/mon/ceph-node-2
-      ceph auth get mon. -o /var/lib/ceph/tmp/keyring
-      ceph mon getmap -o /var/lib/ceph/tmp/mapfile
+      # 配置文件权限
+      chown ceph:ceph -R /var/lib/ceph/tmp
       
-      chown ceph:ceph -R /var/lib/ceph/mon/
-      chown ceph:ceph -R /var/lib/ceph/tmp/
+      # 初始化monitor目录
+      ceph-mon --cluster ceph --mkfs -i node-2 --monmap /var/lib/ceph/tmp/monmap --keyring /var/lib/ceph/tmp/ceph.mon.keyring
       
-      @指定monmap,获得法定人数和fsid信息
-      @指定mon.key,获得操作权限
-      sudo ceph-mon -i node-2 --mkfs --monmap /var/lib/ceph/tmp/mapfile --keyring /var/lib/ceph/tmp/keyring
+      # 配置文件权限
+      chown ceph:ceph -R /var/lib/ceph/mon
       
-      @启动mon，绑定地址
-      sudo ceph-mon -i node-2 --public-addr 10.190.180.242:6789
+      # 启动monitor服务
+      systemctl start ceph-mon@node-2
+      systemctl enable ceph-mon@node-2
       ```
 
 + **mgr**
 
-  1. 创建主机的 mgr 目录
+  + 拷贝集群的 /etc/ceph/ceph.conf  /etc/ceph/ceph.client.admin.keyring 到部署的主机上
+
+  + 创建主机的 mgr 目录
 
      ``` shell
      mkdir /var/lib/ceph/mgr/ceph-node-1    # {cluster}-{hostname}
      ```
 
-  2. 创建集群的主机 mgr 用户，并生成密钥环放在指定目录
+  + 创建集群的主机 mgr 用户，并生成密钥环放在指定目录
 
      ``` shell
      ceph auth get-or-create mgr.node-1 mon 'allow profile mgr' osd 'allow *' mds 'allow *' -o /var/lib/ceph/mgr/ceph-node-1/keyring
      ```
 
-  3. 配置文件夹权限
+  + 配置文件夹权限
 
      ``` shell
      chown ceph:ceph -R /var/lib/ceph/mgr
      ```
 
-  4. 启动 mgr 服务
+  + 启动 mgr 服务
 
      ```shell
      systemctl start ceph-mgr@node-1
      systemctl enable ceph-mgr@node-1
      ```
 
-  5. 启动 mgr.dashboard 模块
+  + 启动 mgr.dashboard 模块
 
      ``` shell
      ceph mgr module enable dashboard
@@ -355,7 +363,7 @@ ansible-playbook site.yml
      ceph dashboard ac-user-create <username> <password> administrator
      ```
 
-  6. 启动 mgr.prometheus 模块
+  + 启动 mgr.prometheus 模块
 
      ``` shell
      ceph mgr module enable prometheus
@@ -363,7 +371,7 @@ ansible-playbook site.yml
      ceph config set mgr mgr/prometheus/server_port 9283
      ```
 
-  7. 查看模块状态
+  + 查看模块状态
 
      ``` shell
      [root@node-1 ~]# ceph mgr services
@@ -392,12 +400,12 @@ ansible-playbook site.yml
     4. 删除 osd 服务
 
        ``` shell
+       systemctl stop ceph-osd@0
+       systemctl disable ceph-osd@0
        ceph-volume lvm zap --destroy --osd-id 0 # ceph-volume lvm zap {vg/lv}
        ceph osd out osd.0
        ceph osd down osd.0
        ceph osd purge osd.0 --yes-i-really-mean-it
-       systemctl stop ceph-osd@0
-       systemctl disable ceph-osd@0
        ```
 
 
