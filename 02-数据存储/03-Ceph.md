@@ -80,7 +80,7 @@
       mkfs.xfs /dev/ceph/osd # 格式化
       mount /dev/ceph/osd /mnt # 挂载
       df -h
-
+      
       pvcreate pvremove
       vgcreate vgremove vgextend vgreduce
       lvcreate lvremove
@@ -139,13 +139,13 @@
 
       ```shell
       cd ceph-ansible/group_vars/
-  
+      
       # 根据模板创建文件
       cp mons.yml.sample mons.yml
       cp mgrs.yml.sample mgrs.yml
       cp osds.yml.sample osds.yml
       cp all.yml.sample all.yml
-  
+      
       # 配置 all.yml
           ---  
           # 配置 Ceph 源
@@ -185,7 +185,7 @@
               wal_vg: ceph
               db: osd-meta
               db_vg: ceph
-  
+      
       # 配置 site.yml
       cd ceph-ansible
       cp site.yml.sample site.yml
@@ -210,7 +210,7 @@ ansible-playbook site.yml
 + **安装**
 
   ``` shell
-  yum install ceph-mon ceph-mgr ceph-dashboard ceph-osd -y
+  yum install ceph-mon ceph-mgr ceph-mgr-dashboard ceph-osd -y
   ```
 
 + **mon**
@@ -219,11 +219,11 @@ ansible-playbook site.yml
 
      ```yaml
      [global]
-     fsid = 4c596c2c-69e3-47c0-a8b0-82ba499ea9ce   # uuid
-     mon_initial_members = node-1                  # hostname [root@node-1 ~]
-     mon_host = 10.190.180.241                     # hostIP
-     public_network = 10.190.180.0/23              # 管理网络
-     cluster_network = 10.190.180.0/23             # 集群网络
+     fsid = 4c596c2c-69e3-47c0-a8b0-82ba499ea9ca
+     mon_initial_members = node-1         
+     mon_host = 192.168.211.3              
+     public_network = 192.168.211.0/24   
+     cluster_network = 192.168.211.0/24   
      auth_cluster_required = cephx
      auth_service_required = cephx
      auth_client_required = cephx
@@ -237,7 +237,7 @@ ansible-playbook site.yml
   2. 配置集群 monmap 信息
 
      ```shell
-     monmaptool --create --add node-1 10.190.180.241 --fsid 4c596c2c-69e3-47c0-a8b0-82ba499ea9ce /var/lib/ceph/tmp/monmap
+     monmaptool --create --add node-1 192.168.211.3 --fsid 4c596c2c-69e3-47c0-a8b0-82ba499ea9ca /var/lib/ceph/tmp/monmap
      ```
 
   3. 配置集群的 client.admin 角色密钥环
@@ -259,7 +259,7 @@ ansible-playbook site.yml
      chown ceph:ceph -R /var/lib/ceph/tmp/
      ```
 
-  6. 初始化主机的monitor数据（生成 /var/lib/ceph/mon/ceph-node-1目录  {cluster}-{hostname}）
+  6. 初始化主机的monitor数据（生成 /var/lib/ceph/mon/ceph-node-1 目录  {cluster}-{hostname}）
 
      ```
      ceph-mon --cluster ceph --mkfs -i node-1 --monmap /var/lib/ceph/tmp/monmap --keyring /var/lib/ceph/tmp/ceph.mon.keyring
@@ -286,7 +286,34 @@ ansible-playbook site.yml
      systemctl disable ceph-mon@node-1
      ```
 
-     
+  10. 去除警告
+
+      ```
+      @ 启动v2版本
+      ceph mon enable-msgr2
+      @ 模式
+      ceph config set mon auth_allow_insecure_global_id_reclaim false
+      ```
+
+  11. 添加节点
+
+      ``` 
+      https://blog.csdn.net/chuan_day/article/details/64929536
+      
+      sudo mkdir /var/lib/ceph/mon/ceph-node-2
+      ceph auth get mon. -o /var/lib/ceph/tmp/keyring
+      ceph mon getmap -o /var/lib/ceph/tmp/mapfile
+      
+      chown ceph:ceph -R /var/lib/ceph/mon/
+      chown ceph:ceph -R /var/lib/ceph/tmp/
+      
+      @指定monmap,获得法定人数和fsid信息
+      @指定mon.key,获得操作权限
+      sudo ceph-mon -i node-2 --mkfs --monmap /var/lib/ceph/tmp/mapfile --keyring /var/lib/ceph/tmp/keyring
+      
+      @启动mon，绑定地址
+      sudo ceph-mon -i node-2 --public-addr 10.190.180.242:6789
+      ```
 
 + **mgr**
 
@@ -363,7 +390,7 @@ ansible-playbook site.yml
        ```
        
     4. 删除 osd 服务
-    
+
        ``` shell
        ceph-volume lvm zap --destroy --osd-id 0 # ceph-volume lvm zap {vg/lv}
        ceph osd out osd.0
@@ -648,6 +675,7 @@ osd_heartbeat_interval = 5
   结算的结果往上取靠近2的N次方的值。比如总共OSD数量是160，复制份数3，pool数量也是3，那么每个pool分配的PG数量就是2048
   
   ceph osd pool application enable poolName [rbd | rgw | cephfs] -- 启用应用类型
+  ceph osd pool application get poolName
   ceph osd lspools
   ceph osd pool get poolName pg_num    
   ceph osd pool set poolName pg_num 128
@@ -667,7 +695,7 @@ osd_heartbeat_interval = 5
   ceph osd blacklist add watcher
   ceph osd blacklist rm watcher
   
-  # 扩容分三步：底层磁盘扩容、分区扩容（可选）、文件系统扩容
+  # 扩容有三个层面：磁盘扩容、分区扩容、文件系统扩容
   rbd resize {pool-name}/{image-name} --size 20G  # 磁盘扩容 fdisk -l
   fdisk /dev/rbd0  # 若直接挂裸盘，则可跳过
   resize2fs /dev/rbd0 # 文件系统扩容 df -h
@@ -704,7 +732,14 @@ osd_heartbeat_interval = 5
 + RBD快照机制
 
   > https://docs.ceph.com/en/latest/rbd/rbd-snapshot/
+  >
+  > https://zhangchenchen.github.io/2017/06/05/ceph-rbd-snapshot/
 
+  + 增量快照
+    + COW(Copy-On-Write)：写时复制，**COW 在创建快照时，并不会发生物理的数据拷贝动作**，仅是拷贝了原始数据所在的源数据块的物理位置元数据。**在创建了快照之后，**一旦源数据块中的原始数据被改写，则会将源数据块上的原始数据拷贝到新数据块中，然后将新数据写入到源数据块中覆盖原始数据。其中所有的源数据块就组成了所谓的源数据卷，而新数据块组成了快照卷。 COW 有一个很明显的缺点，就是会降低源数据卷的写性能，因为每次改写新数据，**实际上都进行了两次写操作。**
+    + ROW(Redirect-On-Write)：写时重定向，创建快照时，ROW 也会 Copy 一份源数据指针表作为快照数据指针表，此时两张表的指针记录都相同的。在创建快照之后，也就是在快照时间点之后，发生了写操作，那么**新数据会直接被写入到快照卷中**，然后再更新源数据指针表的记录，使其指向新数据所在的快照卷地址。为了保证快照数据的完整性，在创建快照时，源数据卷状态会由读写**变成只读的**。如果做了多次快照，**就产生了一个快照链**，磁盘卷始终挂载在快照链的最末端。
+    + 区别：OW 的快照卷存放的是原始数据，而 ROW 的快照卷存放的是新数据。
+  
   + 基础操作
 
     ``` shell 
@@ -713,7 +748,7 @@ osd_heartbeat_interval = 5
     rbd snap rollback {pool-name}/{image-name}@{snap-name}   # 回滚恢复
     rbd snap rm {pool-name}/{image-name}@{snap-name}   
     ```
-
+  
   + 克隆 Layering / Copy-On-Write
 
     ```shell
@@ -722,18 +757,20 @@ osd_heartbeat_interval = 5
     rbd clone {pool-name}/{parent-image}@{snap-name} {pool-name}/{child-image-name}  # 快速克隆
     rbd flatten {pool-name}/{image-name}  # 扁平化，解除父子关系
     ```
-
+  
   + 持久化备份
 
-    + 全量导出
+    https://zhoubofsy.github.io/2019/04/28/storage/ceph/rbd-export-import/
 
+    + 全量导出
+    
       ```shell
       rbd snap export {pool-name}/{image-name}@{snap-name} {path}
       rbd snap import {snap-file} {pool-name}/{image-name}
       ```
-
+  
     + 增量导出
-
+    
       ```shell
       rbd snap export-diff {pool-name}/{image-name}@{snap-name} {path}
       rbd snap import-diff {snap-file} {pool-name}/{image-name}

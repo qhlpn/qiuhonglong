@@ -142,9 +142,82 @@ cat /etc/docker/daemon.json
 
 ``` 
 K8S使用secret连接仓库拉取镜像：http://docs.kubernetes.org.cn/554.html
+```
 
+
+
+### crio
+
+1. 镜像仓库配置
+
+   ```
+   # vi /etc/containers/registries.conf文件
+   # 未限定镜像使用 registry-dev.ctcdn.cn
+   unqualified-search-registries = ["registry-dev.ctcdn.cn"]
+   # harbor.ctyuncdn.cn 使用 registry-dev.ctcdn.cn
+   [[registry]]
+   prefix = "harbor.ctyuncdn.cn"
+   insecure = false
+   blocked = false
+   location = "registry-dev.ctcdn.cn"
+   
+   systemctl restart crio
+   ```
+
+2. 账号登录管理
+
+   ```
+   1. 在有docker 的机器上执行docker login，在 /root/.docker/config.json 可见
+   2. 复制到crio机器上编辑/etc/containers/containers-auth.json文件内
+   3. 修改/etc/crio/crio.conf，设置global_auth_file为/etc/containers/containers-auth.json
+   
+   systemctl restart crio
+   ```
+
+
+
+### containerd
+
+https://blog.csdn.net/sinat_38453878/article/details/123345268
+
+1. 镜像仓库配置
+
+   ```
+   # vi /etc/containerd/config.toml
+   [plugins."io.containerd.grpc.v1.cri".registry.mirrors."docker.io"]
+   	endpoint = ["http://xxx.xxx.xxx.xxx:5000"]
+   ```
+
+2. 账号登录管理
+
+   ```
+   # vi /etc/containerd/config.toml
+   [plugins."io.containerd.grpc.v1.cri".registry.configs."docker.io".tls]
+   	insecure_skip_verify = true
+   [plugins."io.containerd.grpc.v1.cri".registry.configs."docker.io".tls]
+         username = ""
+         password = ""
+   ```
+
+
+
+
+### k3s
 
 ```
+cat /etc/rancher/k3s/registries.yaml
+
+mirrors:
+configs:
+  "harbor.ctyuncdn.cn":
+    auth:
+      username: 
+      password: 
+```
+
+
+
+
 
 
 

@@ -368,6 +368,10 @@ Pod 为 组内容器 提供两种共享资源，包括 网络和存储：
         imagePullPolicy: [ Always|Never|IfNotPresent ]  # 获取镜像的策略 
         command: [string]   # 容器的启动命令列表，如不指定，使用打包时使用的启动命令
         args: [string]      # 容器的启动命令参数列表
+        # 如果command和args均没有指定，那么则使用Dockerfile的配置。
+        # 如果command没有指定，但指定了args，那么Dockerfile中配置的ENTRYPOINT的命令行会被执行，并且将args中填写的参数追加到ENTRYPOINT中。
+  	  # 如果command指定了，但args没有写，那么Dockerfile默认的配置会被忽略，执行输入的command（不带任何参数，当然command中可自带参数）。
+  	  # 如果command和args都指定了，那么Dockerfile的配置被忽略，执行command并追加上args参数。
         workingDir: string  # 容器的工作目录
         volumeMounts:       # 挂载到容器内部的存储卷配置
           - name: string      # 引用pod定义的共享存储卷的名称，需用volumes[]部分定义的的卷名
@@ -2052,3 +2056,29 @@ CNI插件的种类多种多样，关键的功能有两个：
   + **要求宿主机三层连通的方案**
 
     作为一般规则，当K8s网络的traffic离开宿主机时，如果下一跳或者网关**不是集群主机**的IP地址，就**不需要**二层连通，此时**只要三层IP可达**即可把以太帧路由到终点。
+
+
+
+### 容器
+
+https://ustack.io/2019-11-21-container%E7%9B%B8%E5%85%B3%E6%A6%82%E5%BF%B5%E6%A2%B3%E7%90%86.html
+
+OCI（Open Container Initiative）：是由多家公司共同成立的项目，并由linux基金会进行管理，致力于 container runtime 的标准的制定和runc的开发等工作。所谓 container runtime，主要负责的是容器的生命周期的管理。
+
+CRI（container runtime interface）：Kubernetes推出自己的运行时接口，隔离了各个容器引擎之间的差异，而通过统一的接口与各个容器引擎之间进行互动。
+
+<img src="pictures/MTc1qs.jpg" alt="kubelet CRI" style="zoom:125%;" />
+
+
+
+### 调度
+
+过滤 + 打分
+
+https://cloud.tencent.com/developer/article/1644857
+
+
+
+### 源码
+
+https://jiulongzaitian.gitbooks.io/kubernetes/content/yuan-ma-fen-xi/scheduler/kubeletzhu-yao-gong-neng.html
