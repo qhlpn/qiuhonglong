@@ -2,18 +2,34 @@
 
 ### 概念
 
-Kubernetes 是自动化容器编排的开源平台
+Kubernetes 是容器编排平台
 
-<img src="pictures/image-20210622190228210.png" alt="image-20210622190228210" style="zoom: 67%;" />
+<img src="pictures/image-20220904215059541.png" alt="image-20220904215059541" style="zoom: 67%;" />
 
-通过部署Nginx服务来说明Kubernetes系统各个组件调用关系：
+**核心组件**
 
-1. 首先需要明确，一旦Kubernetes环境启动之后，master和node都会将自身的信息存储到etcd数据库中。
-2. Nginx服务的安装请求首先会被发送到master节点上的API Server组件。
-3. API Server组件会调用Scheduler组件来决定到底应该把这个服务安装到那个node节点上。此时，它会从etcd中读取各个node节点的信息，然后按照一定的算法进行选择，并将结果告知API Server。
-4. API Server调用Controller-Manager去调用Node节点安装Nginx服务。
-5. Kubelet接收到指令后，会通知Docker，然后由Docker来启动Nginx的Pod。Pod是Kubernetes的最小操作单元，容器必须跑在Pod中。
-6. Nginx服务就运行了，如果需要访问Nginx，就需要通过kube-proxy来对Pod产生访问的代理，这样，外界用户就可以访问集群中的Nginx服务了。
+- ETCD：分布式高性能键值数据库,存储整个集群的所有元数据
+- ApiServer:  API服务器,集群资源访问控制入口,提供restAPI及安全访问控制
+- Scheduler：调度器,负责把业务容器调度到最合适的Node节点
+- Controller Manager：控制器管理,确保集群资源按照期望的方式运行
+- kubelet：运行在每运行在每个节点上的主要的“节点代理”个节点上的主要的“节点代理”
+  - pod 管理：kubelet 定期从所监听的数据源获取节点上 pod/container 的期望状态（运行什么容器、运行的副本数量、网络或者存储如何配置等等），并调用对应的容器平台接口达到这个状态。
+  - 容器健康检查：kubelet 创建了容器之后还要查看容器是否正常运行，如果容器运行出错，就要根据 pod 设置的重启策略处理
+  - 容器监控：kubelet 会监控所在节点的资源使用情况，并定时向 master 报告，资源使用数据都是通过 cAdvisor 获取的。知道整个集群所有节点的资源情况，对于 pod 的调度和正常运行至关重要
+- kubectl: 命令行接口，用于对 Kubernetes 集群运行命令  https://kubernetes.io/zh/docs/reference/kubectl/ 
+
+
+
+**工作流程**
+
+<img src="pictures/image-20220904215316067.png" alt="image-20220904215316067" style="zoom: 50%;" />
+
+1. 用户准备一个资源文件（记录了业务应用的名称、镜像地址等信息），通过调用APIServer执行创建Pod
+2. APIServer收到用户的Pod创建请求，将Pod信息写入到etcd中
+3. 调度器通过list-watch的方式，发现有新的pod数据，但是这个pod还没有绑定到某一个节点中
+4. 调度器通过调度算法，计算出最适合该pod运行的节点，并调用APIServer，把信息更新到etcd中
+5. kubelet同样通过list-watch方式，发现有新的pod调度到本机的节点了，因此调用容器运行时，去根据pod的描述信息，拉取镜像，启动容器，同时生成事件信息
+6. 同时，把容器的信息、事件及状态也通过APIServer写入到etcd中
 
 
 
