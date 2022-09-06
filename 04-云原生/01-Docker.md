@@ -11,6 +11,24 @@
 #### Docker 安装
 
 ```bash
+# 配置网卡转发，看值是否为1
+$ sysctl -a |grep -w net.ipv4.ip_forward
+net.ipv4.ip_forward = 1
+# 若未配置，需要执行如下
+$ cat <<EOF >  /etc/sysctl.d/docker.conf
+net.bridge.bridge-nf-call-ip6tables = 1
+net.bridge.bridge-nf-call-iptables = 1
+net.ipv4.ip_forward=1
+EOF
+$ sysctl -p /etc/sysctl.d/docker.conf
+
+# 配置反向路由检测（要求从流量进入和出去的网卡需要一致）
+# https://cxymm.net/article/changqing1234/81068780
+echo 0 > /proc/sys/net/ipv4/conf/all/rp_filter 
+echo 0 > /proc/sys/net/ipv4/conf/eth0/rp_filter 
+echo 0 > /proc/sys/net/ipv4/conf/eth1/rp_filter 
+
+
 # 卸载旧版本
 $ yum remove docker \
                   docker-client \
@@ -92,6 +110,9 @@ $ docker version
   docker top
   # 查看容器元数据
   docker inspect
+  
+  
+  docker run -d --name nest-db harbor.ctyuncdn.cn/nest-dev/nest-db:22.2.5
   ```
 
 #### DockerFile

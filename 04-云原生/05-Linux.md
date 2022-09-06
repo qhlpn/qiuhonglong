@@ -233,11 +233,30 @@ cat /proc/meminfo
 + **awk**：读取文件的每一行，输出里面的字段
 
   ``` shell
-  # 格式
-  $ awk 动作 文件名
+  # 原理
+  awk 'BEGIN{ commands } pattern{ commands } END{ commands }'
   # 示例
-  $ awk '{print $0}' demo.txt
+  echo -e "A line 1\nA line 2" | awk 'BEGIN{ print "Start" } { print } END{ print "End" }'
+  Start
+  A line 1
+  A line 2
+  End
+  # 示例
+  kubectl get pv -A | grep storage-mixed | awk '{print $2}' | grep Ti | awk '{info=$1;gsub(/Ti/,"",info);print info}' | awk '{sum += $1} END{print sum}'
   ```
+
+  + **BEGIN语句块** 在awk开始从输入流中读取行 **之前** 被执行，这是一个可选的语句块，比如变量初始化、打印输出表格的表头等语句通常可以写在BEGIN语句块中。
+
+  + **END语句块** 在awk从输入流中读取完所有的行 **之后** 即被执行，比如打印所有行的分析结果这类信息汇总都是在END语句块中完成，它也是一个可选语句块。
+
+  + **pattern语句块** 中的通用命令是最重要的部分，它也是可选的。如果没有提供pattern语句块，则默认执行`{ print }`，即打印每一个读取到的行，awk读取的每一行都会执行该语句块。
+
+    ```shell
+    # 格式
+    $ awk 动作 文件名
+    # 示例
+    $ awk '{print $0}' demo.txt
+    ```
 
   + 分隔符 -F（默认空格）
 

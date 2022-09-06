@@ -116,17 +116,17 @@ typedef struct redisObject {
 
 + **key**
 
-  | 命令                 | 说明             |
-  | -------------------- | ---------------- |
-  | keys pattern         | 查找键           |
-  | exists key [key ...] | 查询键是否存在   |
-  | del key [key ...]    | 删除键           |
-  | type key             | 查询键类型       |
-  | move key db          | 移动键           |
-  | ttl key              | 查询键的生命周期 |
-  | expire key seconds   | 设置过期时间     |
-  | persist key          | 设置永不过期     |
-  | rename key newkey    | 更改键名称       |
+  | 命令                 | 说明                         |
+  | -------------------- | ---------------------------- |
+  | keys pattern         | 查找键 （keys * 查找所有键） |
+  | exists key [key ...] | 查询键是否存在               |
+  | del key [key ...]    | 删除键                       |
+  | type key             | 查询键类型                   |
+  | move key db          | 移动键                       |
+  | ttl key              | 查询键的生命周期             |
+  | expire key seconds   | 设置过期时间                 |
+  | persist key          | 设置永不过期                 |
+  | rename key newkey    | 更改键名称                   |
 
 + **String**
   | 命令                                                         | 说明                                                         |

@@ -594,3 +594,17 @@ public class ReadWriteLock {
 ### MySQL 读写分离 + 数据分片 
 
 > 常用中间件：<u>**Sharding-Sphere**</u>、Mycat
+
+
+
+### MySQL 高可用（MGR/MHA）
+
+https://www.cnblogs.com/xiaoyuxixi/p/13814811.html
+
+
+
+## 5. MySQL L
+
++ DDL DML DCL https://blog.csdn.net/weixin_28755847/article/details/113426345
++ 用户管理 https://blog.csdn.net/aiwangtingyun/article/details/106011258
++ 权限管理 https://www.cnblogs.com/richardzhu/p/3318595.html

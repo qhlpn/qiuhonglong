@@ -213,7 +213,7 @@ ansible-playbook site.yml
   yum install ceph-mon ceph-mgr ceph-mgr-dashboard ceph-osd -y
   ```
 
-+ **mon**
++ **mon** at3
 
   1. 创建配置文件 /etc/ceph/ceph.conf
 
@@ -265,6 +265,8 @@ ansible-playbook site.yml
 
      ```
      ceph-mon --cluster ceph --mkfs -i node-1 --monmap /var/lib/ceph/tmp/monmap --keyring /var/lib/ceph/tmp/ceph.mon.keyring
+     ceph-mon --cluster ceph --mkfs -i node-2 --monmap /var/lib/ceph/tmp/monmap --keyring /var/lib/ceph/tmp/ceph.mon.keyring
+     ceph-mon --cluster ceph --mkfs -i node-3 --monmap /var/lib/ceph/tmp/monmap --keyring /var/lib/ceph/tmp/ceph.mon.keyring
      ```
 
   7. 配置文件夹权限
@@ -297,7 +299,7 @@ ansible-playbook site.yml
       ceph config set mon auth_allow_insecure_global_id_reclaim false
       ```
 
-  11. 添加节点
+  11. （第二种方式）添加节点
 
       ``` 
       # 拷贝集群的 
@@ -420,7 +422,7 @@ ansible-playbook site.yml
 
 ```shell
 ceph [-s|-w] # 静态|动态
-ceph health detail
+ceph health detail # 详细信息，解决方法
 ceph df # 存储使用情况
 ceph {mon/osd/pg/...} dump # 详情
 
@@ -818,6 +820,26 @@ ceph osd map {pool-name} {block_name_prefix}.000000000000423 # object 映射到 
 > https://blog.csdn.net/weillee9000/article/details/102842642
 >
 > https://www.dovefi.com/post/%E6%B7%B1%E5%85%A5%E7%90%86%E8%A7%A3crush1%E7%90%86%E8%A7%A3crush_map%E6%96%87%E4%BB%B6/
+
+```
+ceph osd crush add {id-or-name} {weight} [{bucket-type}={bucket-name} ...]
+ceph osd crush add osd.0 1.000 host=node-1
+ceph osd crush remove {id-or-name} [{bucket-type}={bucket-name} ...]
+ceph osd crush set {id-or-name} {weight} [{bucket-type}={bucket-name} ...]
+ceph osd crush reweight {id-or-name} {weight}
+
+ceph df detail
+ceph osd tree
+ceph osd dump
+
+ceph osd crush rule dump
+ceph osd getcrushmap -o ./crushmap
+crushtool -d crushmap -o decrushmap
+crushtool -c decrushmap -o newcrushmap
+ceph osd setcrushmap -i newcrushmap
+```
+
+
 
 
 
