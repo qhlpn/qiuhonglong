@@ -608,3 +608,7 @@ https://www.cnblogs.com/xiaoyuxixi/p/13814811.html
 + DDL DML DCL https://blog.csdn.net/weixin_28755847/article/details/113426345
 + 用户管理 https://blog.csdn.net/aiwangtingyun/article/details/106011258
 + 权限管理 https://www.cnblogs.com/richardzhu/p/3318595.html
++ 字符集和排序规则 https://blog.csdn.net/weixin_43888891/article/details/121210470
+
+
+

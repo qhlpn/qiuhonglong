@@ -8,14 +8,16 @@ Kubernetes 是容器编排平台
 
 **核心组件**
 
-- ETCD：分布式高性能键值数据库,存储整个集群的所有元数据
-- ApiServer:  API服务器,集群资源访问控制入口,提供restAPI及安全访问控制
-- Scheduler：调度器,负责把业务容器调度到最合适的Node节点
-- Controller Manager：控制器管理,确保集群资源按照期望的方式运行
+- etcd：分布式高性能键值数据库,存储整个集群的所有元数据
+- apiserver:  API服务器,集群资源访问控制入口,提供restAPI及安全访问控制
+- scheduler：调度器,负责把业务容器调度到最合适的Node节点
+- controller manager：控制器管理,确保集群资源按照期望的方式运行
 - kubelet：运行在每运行在每个节点上的主要的“节点代理”个节点上的主要的“节点代理”
   - pod 管理：kubelet 定期从所监听的数据源获取节点上 pod/container 的期望状态（运行什么容器、运行的副本数量、网络或者存储如何配置等等），并调用对应的容器平台接口达到这个状态。
   - 容器健康检查：kubelet 创建了容器之后还要查看容器是否正常运行，如果容器运行出错，就要根据 pod 设置的重启策略处理
   - 容器监控：kubelet 会监控所在节点的资源使用情况，并定时向 master 报告，资源使用数据都是通过 cAdvisor 获取的。知道整个集群所有节点的资源情况，对于 pod 的调度和正常运行至关重要
+- kube-proxy：维护节点的网络规则，实现Pod网络通信，是实现Service的重要部分
+- container-engine：容器引擎，如 Docker cri-o rktlet
 - kubectl: 命令行接口，用于对 Kubernetes 集群运行命令  https://kubernetes.io/zh/docs/reference/kubectl/ 
 
 

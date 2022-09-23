@@ -717,6 +717,7 @@ osd_heartbeat_interval = 5
   rbd device map {pool-name}/{image-name}
   # 取消映射
   rbd device unmap /dev/rbd0
+  rbd device ls
   ```
 
 + 磁盘逻辑卷操作
