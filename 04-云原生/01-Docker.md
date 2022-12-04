@@ -167,6 +167,48 @@ K8S使用secret连接仓库拉取镜像：http://docs.kubernetes.org.cn/554.html
 
 
 
+#### 多镜像架构
+
+```
+https://blog.csdn.net/mycosmos/article/details/125020271
+
+if [ $arm64 = true ]; then
+  docker tag  $old 127.0.0.1:5000/$imageWithVersion-arm64
+  docker push 127.0.0.1:5000/$imageWithVersion-arm64
+  manifestList="$manifestList 127.0.0.1:5000/$imageWithVersion-arm64"
+fi
+
+if [ $amd64 = true ]; then
+  docker tag  $old 127.0.0.1:5000/$imageWithVersion-amd64
+  docker push 127.0.0.1:5000/$imageWithVersion-amd64
+  manifestList="$manifestList 127.0.0.1:5000/$imageWithVersion-amd64"
+fi
+
+docker manifest create --insecure --amend 127.0.0.1:5000/$imageWithVersion $manifestList
+docker manifest push --purge 127.0.0.1:5000/$imageWithVersion
+```
+
+``` shell
+#!/bin/bash
+
+app=nest-lbm
+registry=harbor.ctyuncdn.cn/nest-dev
+
+main(){
+  docker buildx create --use --name ${app} --node ${app}0
+  docker buildx build --platform=linux/arm64,linux/amd64 --push \
+  -f Dockerfile \
+  -t ${registry}/${app}:latest \
+  -t ${registry}/${app}:${DRONE_BRANCH} \
+  -t ${registry}/${app}:${DRONE_BRANCH}-${DRONE_BUILD_NUMBER} \
+  .
+}
+
+main $@
+```
+
+
+
 ### crio
 
 1. 镜像仓库配置

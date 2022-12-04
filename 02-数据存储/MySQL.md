@@ -597,9 +597,17 @@ public class ReadWriteLock {
 
 
 
-### MySQL 高可用（MGR/MHA）
+### MySQL 高可用 + 复制（MGR/MHA）
 
 https://www.cnblogs.com/xiaoyuxixi/p/13814811.html
+
+**异步复制、半同步复制、组复制**
+
+https://blog.51cto.com/u_13691477/5532108
+
+
+
+
 
 
 

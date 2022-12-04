@@ -266,11 +266,11 @@ scrape_configs:
         - targets: ['10.190.180.240:9090','10.190.180.240:9091'] 
         			 # 两个exporter进程均采集本机10.190.180.240.linux指标
           labels:
-            instance: '10.190.180.240.linux'
+              instance: '10.190.180.240.linux'
         - targets: ['10.190.180.241:9090','10.190.180.241:9091']  
                    # 两个exporter进程均采集本机10.190.180.241.linux指标
           labels:
-          instance: '10.190.180.241.linux'
+              instance: '10.190.180.241.linux'
   
   up{job="<job-name>", instance="<instance-id>"}: 如果实例运行状况良好（即可达）为1，或者如果抓取失败则为0
   ```
@@ -407,7 +407,7 @@ scrape_configs:
       # HELP <metrics_name> <doc_string>
     # TYPE <metrics_name> <metrics_type>
       <metric name>{<label name>=<label value>, ...} value [timestamp 缺省时默认当前时间]
-
+  
   # 调用主节点 /federate 接口，并过滤出想要的指标（是配置文件中的match[]（汇总多个子节点的指标）的子集）
   "http://192.168.1.3:9090/federate?match[]={job="zookeeper"}&match[]={job="hbase"}&match[]={__name__=~"instance.*"}&match[]=...
   

@@ -3,7 +3,7 @@
 ##### 硬件信息
 
 ```shell
-# 总核数 = 物理CPU个数xX 每个物理CPU的核数 
+# 总核数 = 物理CPU个数 X 每个物理CPU的核数 
 # 总逻辑CPU数 = 物理CPU个数 x 每个物理CPU的核数 x 超线程数
 
 # 查看物理CPU个数
@@ -11,12 +11,15 @@ cat /proc/cpuinfo| grep "physical id"| sort| uniq| wc -l
 
 # 查看每个物理CPU中core的个数(即核数)
 cat /proc/cpuinfo| grep "cpu cores"| uniq
+# 使用超线程后的CPU中core的个数
+cat /proc/cpuinfo | grep "siblings" | uniq 
 
-# 查看逻辑CPU的个数
+# 查看总逻辑CPU的个数
 cat /proc/cpuinfo| grep "processor"| wc -l
 
 # 查看CPU信息（型号）
 cat /proc/cpuinfo | grep name | cut -f2 -d: | uniq -c
+
 
  
 # 查看内存信息
@@ -25,6 +28,12 @@ cat /proc/meminfo
 # 如何查看Linux 内核
 uname -a
 cat /proc/version
+
+# 检查内核是否包含ocfs2模块
+ls /lib/modules/3.10.0-1062.18.1.el7.x86_64/kernel/fs/ocfs2
+# 设置启动默认内核
+cat /boot/grub2/grub.cfg | grep menuentry
+grub2-set-default 'CentOS Linux (3.10.0-1062.18.1.el7.x86_64) 7 (Core)'
 
 # 查看机器型号（机器硬件型号）
 dmidecode | grep "Product Name"
@@ -173,6 +182,52 @@ cat /proc/meminfo
   | -e   | 编辑工作表             |
 
 ##### 文件操作
+
++ **vim**
+
+  ```
+  i (insert) 	编辑模式
+  esc 		正常模式
+  
+  : 			命令行模式
+  :q			仅退出
+  :q!			不保存退出
+  :wq			保存退出
+  
+  i			插前
+  a (append)	附后
+  hj(joke)k(king)l	左下上右
+  o (open new line)   新增下一行
+  O					新增上一行
+  G			到最后一行
+  gg			到第一行
+  yy (yank)   复制当前行
+  dd (delete) 删除当前行
+  .			重复前次操作
+  u (undo)	撤销前次操作
+  ctrl+r		恢复前次操作
+  w (word)			下个单词首部
+  b (back)			上个单词首部
+  e (end)				下个单词尾部
+  dw (delete word)	删除单词
+  cw (change word)	改变单词
+  yw (yank word)		复制单词
+  p (paste)			粘贴 (3P粘贴3次)
+  ci{ (change in)		删除{}内容 ([]{}()同理)
+  
+  /keyword	搜索
+  n			下一个
+  N			上一个
+  :%s/old/new/g		全局替换
+  
+  ctrl+v		可视化块
+  			按下箭头，选择多行
+  shift+i		插入模式
+  			输入内容
+  esc			两次
+  ```
+
+  
 
 + **pwd**
 
@@ -328,6 +383,13 @@ cat /proc/meminfo
   # /dev/random、/dev/urandom：提供随机字节流
   dd if=/dev/zero of=target count=1 bs=1G
   ```
+
+  ```shell
+  printf "Test awesome shareable disks" | sudo dd of=/dev/vdc bs=1 count=150 conv=notrunc
+  sudo dd if=/dev/vdc bs=1 count=150 conv=notrunc
+  ```
+
+  
 
 + **tar**
 
@@ -721,6 +783,36 @@ cat /proc/meminfo
   | w    | 保存并退出             |
   | q    | 不保存直接退出         |
 
++ **文件系统**
+
+  1. df -T: 查看已经挂载的分区和文件系统类型
+  2. parted -l: 列出所有设备的分区信息
+  3. blkid: 查看已格式化分区的UUID和文件系统
+  4. lsblk -f: 查看所有设备（包括未挂载）的文件系统类型
+  
++ **fsck**
+
+  ```shell
+  # 检查并且试图修复文件系统中的错误
+  fsck /dev/sda
+  ```
+  
++ **losetup**
+
+  ``` shell
+  # https://blog.csdn.net/lengye7/article/details/80247437
+  # loop设备是使用文件来模拟块设备，设备指向文件
+  losetup -a: 查看所有的loop设备
+  dd if=/dev/zero of=loop.img bs=1M count=10240
+  losetup /dev/loop0 loop.img
+  lsblk | grep loop0
+  losetup –a
+  mkdir /loop0
+  mount /dev/loop0 /loop0
+  unmout /loop0
+  losetup -d /dev/loop0
+  ```
+  
 + **RAID**
 
   | RAID级别 | 最少硬盘 | 可用容量 | 读写性能 | 安全性 | 特点                                                         |
@@ -772,3 +864,70 @@ cat /proc/meminfo
   | 扩展      |            | vgextend  | lvextend   |
   | 缩小      |            | vgreduce  | lvreduce   |
 
+##### 模块安装
+
++ **rpm**
+
+  ```shell
+  rpm -ivh 
+  rpm -e
+  rpm -uvh
+  rpm -qa | grep 
+  rpm -qi kernel
+  rpm -ql mysql ==  which mysql
+  
+  
+  -v：显示指令执行过程；
+  -h：列出套件标记；
+  -i：安装指定的套件档；
+  -u：更新指定的套件档；
+  -q：使用询问模式 （-a：查询所有套件；-i：显示套件的相关信息；-l：显示套件的文件列表；）
+  ```
+
+  **如何安装.src.rpm软件包**
+
+  有些软件包是以.src.rpm结尾的，这类软件包是包含了源代码的rpm包，在安装时需要进行编译。这类软件包有两种安装方法：
+
+  **方法一：**
+
+  ```shell
+  rpm -i your-package.src.rpm
+  cd /usr/src/redhat/SPECS
+  rpmbuild -bp your-package.specs             #一个和你的软件包同名的specs文件
+  cd /usr/src/redhat/BUILD/your-package/      #一个和你的软件包同名的目录
+  ./configure                                 #这一步和编译普通的源码软件一样，可以加上参数
+  make
+  make install
+  ```
+
+  **方法二：**
+
+  ```shell
+  rpm -i you-package.src.rpm
+  cd /usr/src/redhat/SPECS
+  rpmbuild -bb your-package.specs       #一个和你的软件包同名的specs文件
+  # 这时在/usr/src/redhat/RPM/i386/（根据具体包的不同，也可能是i686,noarch等等）在这个目录下，有一个新的rpm包，这个是编译好的二进制文件。
+  rpm -i new-package.rpm
+  ```
+
++ **lsmod**
+
++ **modprobe**
+
+  ``` shell
+  modprobe
+  modprobe -r
+  ```
+
++ **depmod**
+
+  ```shell
+  depmod -a
+  # 我编译了一个新的wifi驱动r8192se_pci.ko，将其拷贝到/lib/modules/2.6.31-20-generic/wireless下，然后到/lib/modules/2.6.31-20-generic运行depmod -a，之后可以在任意目录运行modprobe r8192se_pci。
+  ```
+
++ **configure / make / make install**
+
+  https://www.cnblogs.com/lemonning/p/10341228.html
+
+  https://www.cnblogs.com/liujuncm5/p/6713784.html

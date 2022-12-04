@@ -1057,7 +1057,19 @@ Service 解决 Deployment 管理的 Pod IP 动态变化问题
               servicePort: 8080
     ```
 
++ **Endpoint**
 
+  https://blog.csdn.net/c13257595138/article/details/124007593
+
+  每一个**Service**资源都有一个**endpoints**，**endpoints**主要记录了每个**pod**的IP地址信息，当**Pod**的IP发生变化时，endpoints会进行更新。
+
+  <img src="E:\projects\qiuhonglong\04-云原生\pictures\image-20221109230814829.png" alt="image-20221109230814829" style="zoom:67%;" />
+
+  **使用endpoint代理集群外部服务**
+
+  <img src="E:\projects\qiuhonglong\04-云原生\pictures\image-20221109230910669.png" alt="image-20221109230910669" style="zoom:67%;" />
+
+  
 
 + **Network Policy**
 
@@ -1834,7 +1846,13 @@ CR 的变化 会通过 Informer 存入队列 WorkQueue，在 Controller 中消�
   kubectl apply -f config/samples/learning_v1_appservice.yaml
   ```
 
+#### client-go
 
+https://github.com/kubernetes/sample-controller
+
+https://zhuanlan.zhihu.com/p/202611841
+
+<img src="E:\projects\qiuhonglong\04-云原生\pictures\image-20221203203005929.png" alt="image-20221203203005929" style="zoom: 80%;" />
 
 
 
@@ -1885,19 +1903,6 @@ https://mp.weixin.qq.com/s/jpopq16BOA_vrnLmejwEdQ
 
   NodePublishVolume 再通过 mount bind 到 pod 的目录（/var/lib/kubelet/pods/xxx/volumes/kubernetes.io-csi/pvc-bcfe33ed-e822-4b0e-954a-0f5c0468525e/mount/hello-world）
 
-  
-
-
-
-loop device   https://blog.csdn.net/lengye7/article/details/80247437
-
-
-
-查看文件系统 https://www.linuxprobe.com/partition-file-system.html
-
-overlay 文件系统
-
-
 
 
 
@@ -1910,6 +1915,96 @@ Sidecar Containers Watch API 中 CSI 相关 Object 的变动，接着通过本�
 + **Identity Server：**显示 CSI 插件所支持的能力信息
 + **Node Server：**Mount and Umount
 + **Controller Server：**Provisioning and Deleting、Attaching and Detaching
+
+
+
+#### API 资源
+
+K8s 为支持 CSI 标准，包含如下 API 对象：
+
+1. CSINode：判断**外部 CSI 插件**是否注册成功。
+
+   在 Node Driver Registrar 组件向 Kubelet 注册完毕后，Kubelet 会创建该资源，故不需要显式创建 CSINode 资源。
+
+   ``` yaml
+   
+   apiVersion: storage.k8s.io/v1beta1
+   kind: CSINode
+   metadata:
+     name: node-10.212.101.210
+   spec:
+     drivers:
+     - name: yodaplugin.csi.alibabacloud.com
+       nodeID: node-10.212.101.210
+       topologyKeys:
+       - kubernetes.io/hostname
+     - name: pangu.csi.alibabacloud.com
+       nodeID: a5441fd9013042ee8104a674e4a9666a
+       topologyKeys:
+       - topology.pangu.csi.alibabacloud.com/zone
+   ```
+
+- CSIDriver： 简化**外部 CSI 插件**的发现，由集群管理员创建，
+
+  ``` yaml
+  apiVersion: storage.k8s.io/v1beta1
+  kind: CSIDriver
+  metadata:
+    name: pangu.csi.alibabacloud.com
+  spec:
+    # 插件是否支持卷挂接（VolumeAttach）
+    attachRequired: true
+    # Mount阶段是否CSI插件需要Pod信息
+    podInfoOnMount: true
+    # 指定CSI支持的卷模式
+    volumeLifecycleModes:
+    - Persistent
+  ```
+
+- VolumeAttachment：记录了存储卷的挂接/摘除信息以及节点信息
+
+  ```yaml
+  apiVersion: storage.k8s.io/v1
+  kind: VolumeAttachment
+  metadata:
+    annotations:
+      csi.alpha.kubernetes.io/node-id: 21481ae252a2457f9abcb86a3d02ba05
+    finalizers:
+    - external-attacher/pangu-csi-alibabacloud-com
+    name: csi-0996e5e9459e1ccc1b3a7aba07df4ef7301c8e283d99eabc1b69626b119ce750
+  spec:
+    attacher: pangu.csi.alibabacloud.com
+    nodeName: node-10.212.101.241
+    source:
+      persistentVolumeName: pangu-39aa24e7-8877-11eb-b02f-021234350de1
+  status:
+    attached: true
+  ```
+
+#### 支持特性
+
+
+
+
+
+
+
+**日志级别**
+
+``` shell
+--v=0   Generally useful for this to ALWAYS be visible to an operator.
+--v=1   A reasonable default log level if you don’t want verbosity.
+--v=2   Useful steady state information about the service and important log messages that may correlate to significant changes in the system. This is the recommended default log level for most systems.
+--v=3   Extended information about changes.
+--v=4   Debug level verbosity.
+--v=6   Display requested resources.
+--v=7   Display HTTP request headers.
+--v=8   Display HTTP request contents
+```
+
+
+
+
 
 
 

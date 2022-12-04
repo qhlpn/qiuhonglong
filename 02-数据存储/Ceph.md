@@ -426,6 +426,7 @@ ceph health detail # 详细信息，解决方法
 ceph df # 存储使用情况
 ceph {mon/osd/pg/...} dump # 详情
 
+ceph --show-config
 # 修改 ceph  配置 （1.2 临时生效，3 永久生效）
 # 1. ceph config
 ceph config set mon auth_allow_insecure_global_id_reclaim false
@@ -684,6 +685,9 @@ osd_heartbeat_interval = 5
   PGs = ((total_number_of_OSD * 100) / max_replication_count) / pool_count
   结算的结果往上取靠近2的N次方的值。比如总共OSD数量是160，复制份数3，pool数量也是3，那么每个pool分配的PG数量就是2048
   
+  ceph.conf: osd_pool_default_size = 3
+  ceph osd pool set poolName size 1   
+  
   ceph osd pool application enable poolName [rbd | rgw | cephfs] -- 启用应用类型
   ceph osd pool application get poolName
   ceph osd lspools
@@ -740,7 +744,7 @@ osd_heartbeat_interval = 5
   rbd trash rm {pool-name}/{image-id}        # 删除回收站
   ```
 
-+ RBD快照机制
++ RBD快照克隆（COW）
 
   > https://docs.ceph.com/en/latest/rbd/rbd-snapshot/
   >
@@ -748,11 +752,28 @@ osd_heartbeat_interval = 5
 
   + 增量快照
     + COW(Copy-On-Write)：写时复制，**COW 在创建快照时，并不会发生物理的数据拷贝动作**，仅是拷贝了原始数据所在的源数据块的物理位置元数据。**在创建了快照之后，**一旦源数据块中的原始数据被改写，则会将源数据块上的原始数据拷贝到新数据块中，然后将新数据写入到源数据块中覆盖原始数据。其中所有的源数据块就组成了所谓的源数据卷，而新数据块组成了快照卷。 COW 有一个很明显的缺点，就是会降低源数据卷的写性能，因为每次改写新数据，**实际上都进行了两次写操作。**
+    
     + ROW(Redirect-On-Write)：写时重定向，创建快照时，ROW 也会 Copy 一份源数据指针表作为快照数据指针表，此时两张表的指针记录都相同的。在创建快照之后，也就是在快照时间点之后，发生了写操作，那么**新数据会直接被写入到快照卷中**，然后再更新源数据指针表的记录，使其指向新数据所在的快照卷地址。为了保证快照数据的完整性，在创建快照时，源数据卷状态会由读写**变成只读的**。如果做了多次快照，**就产生了一个快照链**，磁盘卷始终挂载在快照链的最末端。
-    + 区别：OW 的快照卷存放的是原始数据，而 ROW 的快照卷存放的是新数据。
   
+    + **区别：**COW 的快照卷存放的是原始数据，而 ROW 的快照卷存放的是新数据。
+    
+    + **COW的优缺点**
+    
+      优势：COW 在进行快照操作之前，不会占用任何的存储资源，也不会影响系统性能。
+    
+      劣势：降低源数据卷的写性能。当修改源数据时，会发生两次写操作：将源数据写入快照卷中，将新数据写入源数据卷中。
+    
+      如果主机写入数据频繁，那么这种方式将非常消耗I/O。
+    
+    + 优势：不会降低源数据卷的写性能。源数据卷创建快照后的写操作会被重定向，所有的写 I/O 都被重定向到新卷中，而所有快照卷数据(旧数据)均保留在只读的源数据卷中。因此更新源数据只需要一个写操作，解决了 COW 写两次的性能问题。
+    
+      劣势：
+    
+      1. 没有一个完整的快照卷。ROW 的快照卷数据映射表保存的是源数据卷的原始副本，而源数据卷数据指针表保存的则是更新后的副本。因此，当创建了多个快照时，会产生一个快照链，使原始数据的访问快照卷和源数据卷数据的追踪以及快照的删除将变得异常复杂。在恢复快照时会不断地合并快照文件，造成较大的系统开销。
+      2. 单机读性能下降。由于采用了重定向写，**使得原本连续的源数据分散到了快照数据卷中**，连续写变成了随机写，**造成读性能下降。**
+    
   + 基础操作
-
+  
     ``` shell 
     rbd snap create {pool-name}/{image-name}@{snap-name}   # 创建
     rbd snap ls {pool-name}/{image-name}
@@ -761,7 +782,7 @@ osd_heartbeat_interval = 5
     ```
   
   + 克隆 Layering / Copy-On-Write
-
+  
     ```shell
     rbd snap create {pool-name}/{image-name}@{snap-name}      # 创建快照
     rbd snap protect {pool-name}/{image-name}@{snapshot-name}  # 设置保护位
@@ -770,9 +791,9 @@ osd_heartbeat_interval = 5
     ```
   
   + 持久化备份
-
+  
     https://zhoubofsy.github.io/2019/04/28/storage/ceph/rbd-export-import/
-
+  
     + 全量导出
     
       ```shell
@@ -786,6 +807,19 @@ osd_heartbeat_interval = 5
       rbd snap export-diff {pool-name}/{image-name}@{snap-name} {path}
       rbd snap import-diff {snap-file} {pool-name}/{image-name}
       ```
+  
++ 任务队列
+
+  ``` shell
+  ceph rbd task add remove <image_spec>
+  ceph rbd task add flatten <image_spec>
+  ceph rbd task add migration commit <image_spec>
+  ceph rbd task add migration abort <image_spec>
+  ceph rbd task cancel <task_id>
+  ceph rbd task list {<task_id>}
+  ceph rbd task add trash remove <image_id_spec>
+  ceph rbd task add migration execute <image_spec>
+  ```
 
 
 
@@ -1031,3 +1065,83 @@ http://www.manongjc.com/article/90348.html
 |            |                                                              |
 | Stale      | 未刷新态。 PG 存储的所有 OSD 都挂掉（单个挂掉可转移）；或者 Mon 没有检测到 OSD Primary 统计信息（网络抖动） |
 | Down       | 宕机态。当前剩余在线的 OSD 不足以完成数据修复                |
+
+#### 3.7 ceph csi
+
+https://github.com/ceph/ceph-csi/blob/devel/docs/design/proposals/rbd-snap-clone.md
+
++ rbd create source
+
+``` 
+[utils.go:176] ID: 674 Req-ID: pvc-4e1ba0f1-cf74-44c2-ab8e-ae14cfffe585 GRPC call: /csi.v1.Controller/CreateVolume
+[rbd_util.go:242] ID: 674 Req-ID: pvc-4e1ba0f1-cf74-44c2-ab8e-ae14cfffe585 rbd: create rbd/csi-vol-387c2163-6bfd-11ed-90a1-0000006cf3fe size 10240M (features: [layering]) using mon 192.168.211.31:6789
+```
+
++ rbd snap create
+
+```
+[utils.go:176] ID: 676 Req-ID: snapshot-d47037e9-68a9-48ef-bb66-bd3981997506 GRPC call: /csi.v1.Controller/CreateSnapshot
+[rbd_util.go:1266] ID: 676 Req-ID: snapshot-d47037e9-68a9-48ef-bb66-bd3981997506 rbd: snap create rbd/csi-vol-387c2163-6bfd-11ed-90a1-0000006cf3fe@csi-snap-ed39d536-6bfd-11ed-90a1-0000006cf3fe using mon 192.168.211.31:6789
+[rbd_util.go:1325] ID: 676 Req-ID: snapshot-d47037e9-68a9-48ef-bb66-bd3981997506 rbd: clone rbd/csi-vol-387c2163-6bfd-11ed-90a1-0000006cf3fe@csi-snap-ed39d536-6bfd-11ed-90a1-0000006cf3fe rbd/csi-snap-ed39d536-6bfd-11ed-90a1-0000006cf3fe (features: [deep-flatten layering]) using mon 192.168.211.31:6789
+[rbd_util.go:1279] ID: 676 Req-ID: snapshot-d47037e9-68a9-48ef-bb66-bd3981997506 rbd: snap rm rbd/csi-vol-387c2163-6bfd-11ed-90a1-0000006cf3fe@csi-snap-ed39d536-6bfd-11ed-90a1-0000006cf3fe using mon 192.168.211.31:6789
+[rbd_util.go:1266] ID: 676 Req-ID: snapshot-d47037e9-68a9-48ef-bb66-bd3981997506 rbd: snap create rbd/csi-vol-387c2163-6bfd-11ed-90a1-0000006cf3fe@csi-snap-ed39d536-6bfd-11ed-90a1-0000006cf3fe using mon 192.168.211.31:6789
+[rbd_util.go:704] ID: 676 Req-ID: snapshot-d47037e9-68a9-48ef-bb66-bd3981997506 clone depth is (1), configured softlimit (4) and hardlimit (8) for rbd/csi-snap-ed39d536-6bfd-11ed-90a1-0000006cf3fe
+```
+
+**Deep-flatten** makes `rbd flatten` work on all the snapshots of an image, in addition to the image itself. Without it, snapshots of an image will still rely on the parent, so the parent will not be delete-able until the snapshots are deleted. Deep-flatten makes a parent independent of its clones, even if they have snapshots.
+
++ rbd snap clone
+
+```
+[utils.go:176] ID: 685 Req-ID: pvc-ab9bb529-616e-4878-bb6f-ecc2bd3b09ac GRPC call: /csi.v1.Controller/CreateVolume
+[rbd_util.go:1187] ID: 685 Req-ID: pvc-ab9bb529-616e-4878-bb6f-ecc2bd3b09ac setting disableInUseChecks: true image features: [layering] mounter: rbd
+[rbd_util.go:1325] ID: 685 Req-ID: pvc-ab9bb529-616e-4878-bb6f-ecc2bd3b09ac rbd: clone rbd/csi-snap-ed39d536-6bfd-11ed-90a1-0000006cf3fe@csi-snap-ed39d536-6bfd-11ed-90a1-0000006cf3fe rbd/csi-vol-c834d502-6bff-11ed-90a1-0000006cf3fe (features: [layering]) using mon 192.168.211.31:6789
+[rbd_util.go:704] ID: 685 Req-ID: pvc-ab9bb529-616e-4878-bb6f-ecc2bd3b09ac clone depth is (2), configured softlimit (4) and hardlimit (8) for rbd/csi-vol-c834d502-6bff-11ed-90a1-0000006cf3fe
+```
+
++ rbd delete source
+
+```
+[utils.go:176] ID: 686 Req-ID: 0001-0024-edeca71c-f155-44da-af0d-9a5d29203f93-0000000000000009-387c2163-6bfd-11ed-90a1-0000006cf3fe GRPC call: /csi.v1.Controller/DeleteVolume
+[rbd_util.go:540] ID: 686 Req-ID: 0001-0024-edeca71c-f155-44da-af0d-9a5d29203f93-0000000000000009-387c2163-6bfd-11ed-90a1-0000006cf3fe rbd: delete csi-vol-387c2163-6bfd-11ed-90a1-0000006cf3fe-temp using mon 192.168.211.31:6789, pool rbd
+[rbd_util.go:540] ID: 686 Req-ID: 0001-0024-edeca71c-f155-44da-af0d-9a5d29203f93-0000000000000009-387c2163-6bfd-11ed-90a1-0000006cf3fe rbd: delete csi-vol-387c2163-6bfd-11ed-90a1-0000006cf3fe using mon 192.168.211.31:6789, pool rbd
+[rbd_util.go:493] ID: 686 Req-ID: 0001-0024-edeca71c-f155-44da-af0d-9a5d29203f93-0000000000000009-387c2163-6bfd-11ed-90a1-0000006cf3fe executing [rbd task add trash remove rbd/ffebe2a5b4cce --id admin --keyfile=/tmp/csi/keys/keyfile-279865204 -m 192.168.211.31:6789] for image (csi-vol-387c2163-6bfd-11ed-90a1-0000006cf3fe) using mon 192.168.211.31:6789, pool rbd
+[cephcmds.go:60] ID: 686 Req-ID: 0001-0024-edeca71c-f155-44da-af0d-9a5d29203f93-0000000000000009-387c2163-6bfd-11ed-90a1-0000006cf3fe command succeeded: ceph [rbd task add trash remove rbd/ffebe2a5b4cce --id admin --keyfile=***stripped*** -m 192.168.211.31:6789]
+```
+
++ rbd delete snap
+
+```
+[utils.go:176] ID: 687 Req-ID: 0001-0024-edeca71c-f155-44da-af0d-9a5d29203f93-0000000000000009-ed39d536-6bfd-11ed-90a1-0000006cf3fe GRPC call: /csi.v1.Controller/DeleteSnapshot
+[rbd_util.go:1279] ID: 687 Req-ID: 0001-0024-edeca71c-f155-44da-af0d-9a5d29203f93-0000000000000009-ed39d536-6bfd-11ed-90a1-0000006cf3fe rbd: snap rm rbd/csi-snap-ed39d536-6bfd-11ed-90a1-0000006cf3fe@csi-snap-ed39d536-6bfd-11ed-90a1-0000006cf3fe using mon 192.168.211.31:6789
+[rbd_util.go:540] ID: 687 Req-ID: 0001-0024-edeca71c-f155-44da-af0d-9a5d29203f93-0000000000000009-ed39d536-6bfd-11ed-90a1-0000006cf3fe rbd: delete csi-snap-ed39d536-6bfd-11ed-90a1-0000006cf3fe using mon 192.168.211.31:6789, pool rbd
+[rbd_util.go:493] ID: 687 Req-ID: 0001-0024-edeca71c-f155-44da-af0d-9a5d29203f93-0000000000000009-ed39d536-6bfd-11ed-90a1-0000006cf3fe executing [rbd task add trash remove rbd/ffebe9f8d96ba --id admin --keyfile=/tmp/csi/keys/keyfile-647801411 -m 192.168.211.31:6789] for image (csi-snap-ed39d536-6bfd-11ed-90a1-0000006cf3fe) using mon 192.168.211.31:6789, pool rbd
+[cephcmds.go:60] ID: 687 Req-ID: 0001-0024-edeca71c-f155-44da-af0d-9a5d29203f93-0000000000000009-ed39d536-6bfd-11ed-90a1-0000006cf3fe command succeeded: ceph [rbd task add trash remove rbd/ffebe9f8d96ba --id admin --keyfile=***stripped*** -m 192.168.211.31:6789]
+```
+
++ rbd delete clone
+
+```
+[utils.go:176] ID: 688 Req-ID: 0001-0024-edeca71c-f155-44da-af0d-9a5d29203f93-0000000000000009-c834d502-6bff-11ed-90a1-0000006cf3fe GRPC call: /csi.v1.Controller/DeleteVolume
+[rbd_util.go:540] ID: 688 Req-ID: 0001-0024-edeca71c-f155-44da-af0d-9a5d29203f93-0000000000000009-c834d502-6bff-11ed-90a1-0000006cf3fe rbd: delete csi-vol-c834d502-6bff-11ed-90a1-0000006cf3fe-temp using mon 192.168.211.31:6789, pool rbd
+[rbd_util.go:540] ID: 688 Req-ID: 0001-0024-edeca71c-f155-44da-af0d-9a5d29203f93-0000000000000009-c834d502-6bff-11ed-90a1-0000006cf3fe rbd: delete csi-vol-c834d502-6bff-11ed-90a1-0000006cf3fe using mon 192.168.211.31:6789, pool rbd
+[rbd_util.go:493] ID: 688 Req-ID: 0001-0024-edeca71c-f155-44da-af0d-9a5d29203f93-0000000000000009-c834d502-6bff-11ed-90a1-0000006cf3fe executing [rbd task add trash remove rbd/ffebe97205856 --id admin --keyfile=/tmp/csi/keys/keyfile-887617734 -m 192.168.211.31:6789] for image (csi-vol-c834d502-6bff-11ed-90a1-0000006cf3fe) using mon 192.168.211.31:6789, pool rbd
+[cephcmds.go:60] ID: 688 Req-ID: 0001-0024-edeca71c-f155-44da-af0d-9a5d29203f93-0000000000000009-c834d502-6bff-11ed-90a1-0000006cf3fe command succeeded: ceph [rbd task add trash remove rbd/ffebe97205856 --id admin --keyfile=***stripped*** -m 192.168.211.31:6789]
+```
+
+
+
+```shell
+# rbd clone
+validate_parent: parent snapshot must be protected
+
+# rbd rm
+rbd: image has snapshots - these must be deleted with 'rbd snap purge' before the image can be removed.
+
+# rbd snap rm
+librbd::Operations: snapshot is protected
+
+# rbd snap unprotect
+cannot unprotect: at least 2 children
+```
+
