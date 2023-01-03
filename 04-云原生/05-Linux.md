@@ -1,5 +1,3 @@
-#### 基本命令
-
 ##### 硬件信息
 
 ```shell
@@ -20,12 +18,15 @@ cat /proc/cpuinfo| grep "processor"| wc -l
 # 查看CPU信息（型号）
 cat /proc/cpuinfo | grep name | cut -f2 -d: | uniq -c
 
-
- 
 # 查看内存信息
 cat /proc/meminfo
 
-# 如何查看Linux 内核
+# 如何查看操作系统
+cat /etc/redhat-release
+lsb_release -a
+cat  /etc/issue
+
+# 查看内核版本
 uname -a
 cat /proc/version
 
@@ -37,17 +38,16 @@ grub2-set-default 'CentOS Linux (3.10.0-1062.18.1.el7.x86_64) 7 (Core)'
 
 # 查看机器型号（机器硬件型号）
 dmidecode | grep "Product Name"
-
-# 如何查看linux 系统版本
-cat /etc/redhat-release
-lsb_release -a
-cat  /etc/issue
  
 # 如何查看linux系统和CPU型号，类型和大小
 cat /proc/cpuinfo
 
 # 如何查看linux 系统内存大小的信息，可以查看总内存，剩余内存，可使用内存等信息  
 cat /proc/meminfo
+
+# 查看是否HDD  rota=1 旋转=HDD
+lsblk -o name,rota
+grep ^ /sys/block/*/queue/rotational
 ```
 
 
@@ -76,11 +76,21 @@ cat /proc/meminfo
 
   **pstree**
 
-  | 参数 | 作用                               |
-  | ---- | ---------------------------------- |
-  | -a   | 显示所有进程（包括其他用户的进程） |
-  | -u   | 用户以及其他详细信息               |
-  | -x   | 显示没有控制终端的进程             |
+  | 参数 | 作用                                                    |
+  | ---- | ------------------------------------------------------- |
+  | -a   | 显示所有进程（包括其他用户的进程）                      |
+  | -u   | 用户以及其他详细信息                                    |
+  | -x   | 显示没有控制终端的进程                                  |
+  | -e   | 此选项的效果和指定"-A"选项相同，显示所有程序。          |
+  | -f   | 显示UID,PPIP,C与STIME栏位                               |
+  | -L   | 显示线程及线程个数显示出来（LWP: light weight process） |
+
+  ```
+  ps -axu
+  ps -ef
+  ps aux -L
+  ps -efL
+  ```
 
   > **R（运行）：**进程正在运行或在运行队列中等待。
   >
@@ -92,7 +102,17 @@ cat /proc/meminfo
   >
   > **T（停止）：**进程收到停止信号后停止运行。
   >
-  > 高优先级（<），低优先级（N），被锁进内存（L），包含子进程（s），多线程（l）
+  > 高优先级（<）
+  >
+  > 低优先级（N）
+  >
+  > 被锁进内存（L - has pages locked into memory）
+  >
+  > 包含子进程（s - is a session leader）
+  >
+  > 多线程（l - is multi-threaded）
+  >
+  > 位于前台的进程组  (+)
 
 + **top**
 
@@ -121,6 +141,12 @@ cat /proc/meminfo
   ``` shell
   pidof sshd
   ```
+
++ **strace**：
+
++ **ulimit**：
+
++ **dmesg**：
 
 + **kill**：用于终止某个指定PID值的服务进程。kill [参数] 进程的PID
 
@@ -582,8 +608,30 @@ cat /proc/meminfo
   ```shell
   while [ 1 == 1 ]; do echo "+"; done
   ```
+  
++ ```shell
+  #!/bin/bash
+  pools=$(ceph osd lspools | awk '{print $2}')
+  echo "${pools}" | while read pool
+  do
+      echo ------------------ ${pool} -------------------
+      trashes=$(rbd trash ls ${pool} | grep -E 'csi|evds')
+      echo "${trashes}" | while read trash
+      do
+      	trash=(`echo ${trash}`)
+      	if [ ! -z ${trash} ]; then
+      		echo ${trash[0]} ${trash[1]}
+      		rbd trash restore ${pool}/${trash[0]}
+      		if [ $? -eq 0 ]; then
+  				rbd snap purge ${pool}/${trash[1]}
+      			rbd rm ${pool}/${trash[1]}
+      		fi
+      	fi
+      done
+  done
+  ```
 
-
+  
 
 ##### 用户管理
 
@@ -863,6 +911,34 @@ cat /proc/meminfo
   | 删除      | pvremove   | vgremove  | lvremove   |
   | 扩展      |            | vgextend  | lvextend   |
   | 缩小      |            | vgreduce  | lvreduce   |
+  
++ **parted**
+
+  ```shell
+  # https://www.cnblogs.com/LuLu-0904/p/16784733.html
+  
+  [root@evm-4zgcg3kn0u80 ~]# parted /dev/vdc
+  GNU Parted 3.1
+  Using /dev/vdc
+  Welcome to GNU Parted! Type 'help' to view a list of commands.
+  (parted) print
+  Error: /dev/vdc: unrecognised disk label
+  Model: Virtio Block Device (virtblk)                                      
+  Disk /dev/vdc: 10.7GB
+  Sector size (logical/physical): 512B/512B
+  Partition Table: unknown
+  Disk Flags: 
+  (parted) mklabel gpt
+  (parted) mkpart                                                           
+  Partition name?  []?                                                      
+  File system type?  [ext2]? ext4                                           
+  Start? 0%                                                                 
+  End? 33%
+  ```
+
+  
+
+
 
 ##### 模块安装
 
@@ -926,8 +1002,254 @@ cat /proc/meminfo
   # 我编译了一个新的wifi驱动r8192se_pci.ko，将其拷贝到/lib/modules/2.6.31-20-generic/wireless下，然后到/lib/modules/2.6.31-20-generic运行depmod -a，之后可以在任意目录运行modprobe r8192se_pci。
   ```
 
-+ **configure / make / make install**
++ **configure + make + make install**
 
   https://www.cnblogs.com/lemonning/p/10341228.html
 
   https://www.cnblogs.com/liujuncm5/p/6713784.html
+
+##### Nginx
+
++ **nginx -t**：检测配置文件语法
+
++ **nginx -s reload**：热加载配置文件
+
+  ``` nginx
+  worker_processes 8;
+  worker_rlimit_nofile 65535;
+  pid sbin/nginx.pid;
+  
+  events {
+      use epoll;
+      worker_connections  65535;
+  }
+  
+  # 四层代理
+  stream {
+      upstream nest-db {
+          server 192.168.211.30:13306;
+      }
+  
+      server{
+          listen 13306;
+          proxy_connect_timeout 5s;
+          proxy_timeout 30m;
+          proxy_pass nest-db;
+      }
+  }
+  
+  
+  # 七层代理
+  http {
+      include mime.types;
+      include log.conf;
+  
+      default_type aplication/octet-stream;
+      sendfile on;
+  
+      client_max_body_size 800M;
+      proxy_set_header Host $host:$server_port;
+      proxy_set_header X-Real-IP $remote_addr;
+      fastcgi_intercept_errors on;
+      proxy_intercept_errors on;
+      vhost_traffic_status_zone;
+  
+      keepalive_requests 8192;
+      keepalive_timeout 60s;
+      server_tokens off;
+  
+      map $http_upgrade $connection_upgrade {
+        default upgrade;
+        '' close;
+      }
+  
+      proxy_cache_path cache levels=1:2 keys_zone=ctcloud:20m max_size=3000m inactive=7d;
+  
+      server {
+          listen 443 ssl;
+          server_name  gogs.ctcdn.cn;    # support regex
+  
+          ssl_certificate ssl/ctcdn.cn.crt;
+          ssl_certificate_key ssl/ctcdn.cn.key;
+          ssl_protocols TLSv1 TLSv1.1 TLSv1.2;
+          ssl_ciphers ECDHE-RSA-AES128-GCM-SHA256:HIGH:!aNULL:!MD5:!RC4:!DHE;
+          ssl_prefer_server_ciphers on;
+  
+          location / {
+               proxy_pass https://gogs.ctcdn.cn;   # use hosts
+          }
+      }
+  
+      upstream minio {
+          server 192.168.211.32:9009;
+          server 192.168.211.33:9009;
+          server 192.168.211.34:9009;
+      }
+  
+      server {
+          listen 443 ssl;
+          server_name  minio.ctcdn.cn;
+  
+          ssl_certificate ssl/ctcdn.cn.crt;
+          ssl_certificate_key ssl/ctcdn.cn.key;
+          ssl_protocols TLSv1 TLSv1.1 TLSv1.2;
+          ssl_ciphers ECDHE-RSA-AES128-GCM-SHA256:HIGH:!aNULL:!MD5:!RC4:!DHE;
+          ssl_prefer_server_ciphers on;
+  
+          proxy_set_header X-Forwarded-Proto https;
+          proxy_set_header X-Forwarded-Host minio.ctcdn.cn;
+          proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+          location / {
+               proxy_set_header Host $host;
+               proxy_pass http://minio;
+          }
+      }
+  
+  }
+  ```
+
+##### 网络管理
+
++ **iptables**
+
+  ![image-20221205222720733](E:\projects\qiuhonglong\04-云原生\pictures\image-20221205222720733.png)
+
+  + **五链（阶段）：**当一个网络包进入一台机器的时候：
+    1. 首先拿下MAC头看看，是不是我的。如果是，则拿下IP头来。
+    2. 先进mangle表的**PREROUTING**链。在这里可以根据需要改变数据包头内容，之后进入nat表的PREROUTING链，在这里可以根据需要做**Dnat**，也就是目标地址转换。
+    3. 进入路由判断，要判断是进入本地的还是转发的。
+    4. 如果是进入本地的，就进入**INPUT**链，之后按条件过滤限制进入。之后进入本机，再进入**OUTPUT**链，按条件过滤限制出去，离开本地。
+    5. 如果是转发就进入**FORWARD**链，根据条件过滤限制转发。
+    6. 之后进入**POSTROUTING**链，这里可以做**Snat**，离开网络接口。
+  + **四表（功能）：**raw–>mangle–>nat–>filter。这四个优先级依次降低。
+    1. 数据包的过滤（**filter**）
+    2. 网络地址转换（**nat**）
+    3. 数据包的修改（**mangle**）
+    4. 关闭nat表上启用的连接追踪机制（**raw** 不常用）
+  + **动作**
+    - **ACCEPT** ：接收数据包。
+    - **DROP** ：丢弃数据包。
+    - **REDIRECT** ：重定向、映射、透明代理。
+    - **SNAT** ：源地址转换。
+    - **DNAT** ：目标地址转换。
+    - **MASQUERADE** ：IP伪装（NAT），用于ADSL。
+    - **LOG** ：日志记录。
+    - **SEMARK** : 添加SEMARK标记以供网域内强制访问控制（MAC）
+
+  | 参数                 | 作用                                                         |
+  | -------------------- | ------------------------------------------------------------ |
+  | -P  --policy [chain] | 为指定链设置默认策略<br />防火墙策略一般分为两种，一种叫 通 策略，一种叫 堵 策略<br />通策略，默认门是关着的，必须要定义谁能进<br />堵策略则是，大门是洞开的，但是你必须有身份认证，否则不能进<br />iptables -P INPUT DROP     # INPUT filter 默认拒绝（不让进） <br />iptables -P FORWARD DROP # FORWARD filter 默认拒绝（不让转发）<br />iptables -P OUTPUT ACCEPT # OUTPUT filter 默认放行（让出） |
+  | -F  --flush          | 清空指定链的规则                                             |
+  | -N  --new-chain      | 创建新的链                                                   |
+  | -X  --delete-chain   | 删除指定的链                                                 |
+  | -E  --rename-chain   | 重命名指定的链                                               |
+  |                      |                                                              |
+  | -L  --list           | 查看指定链的规则                                             |
+  | -A  --append         | 在规则链的末尾加入新规则                                     |
+  | -I  --insert         | num 在规则链的头部加入新规则                                 |
+  | -D  --delete         | num 删除某一条规则                                           |
+  | -s  --source         | 匹配来源地址IP/MASK，加叹号"!"表示除这个IP外。               |
+  | -d  --destination    | 匹配目标地址                                                 |
+  | -i  --in-interface   | 网卡名称 匹配从这块网卡流入的数据                            |
+  | -o  --out-interface  | 网卡名称 匹配从这块网卡流出的数据                            |
+  | -p                   | 匹配协议,如tcp,udp,icmp                                      |
+  | --dport              | 匹配目标端口号                                               |
+  | --sport              | 匹配来源端口号                                               |
+  | -j                   | 即满足某条件时该执行什么样的动作                             |
+
+  ```shell
+  # 模板
+  iptables -t 表名 <-A/I/D/R> 规则链名 [规则号] <-i/o 网卡名> -p 协议名 <-s 源IP/源子网> --sport 源端口 <-d 目标IP/目标子网> --dport 目标端口 -j 动作
+  
+  # 查看链规则
+  iptables -nL --line-numbers -v # 默认查看 filter 表，如果需要查看其他表加上 -t 表名
+  
+  # 插入规则
+  iptables -I INPUT -i lo -j ACCPET # 接受所有来自lo网口的访问
+  iptables -I INPUT -p imcp -j ACCEPT # 针对协议开放
+  iptables -I INPUT -p tcp --dport 22 -j ACCEPT  # 针对端口开放（需要指明协议）
+  iptables -I INPUT -s 192.168.1.0/24 -p tcp --dport 22 -j ACCPET  # 针对IP段访问
+  
+  # 端口转发（本地8080 转发到 远程192.168.1.22:80）
+  iptables -t nat -A PREROUTING -p tcp -i eth0 --dport 8080 -j DNAT --to 192.168.1.22:80
+  iptables -t nat -A POSTROUTING -j MASQUERADE
+  echo 1 > /proc/sys/net/ipv4/ip_forward # 需要打开网转发
+  iptables -t filter FORWARD -d 192.168.1.22/32 -j ACCEPT # 转发的FROWARD要允许双方的数据传输
+  iptables -t filter FORWARD -s 192.168.1.22/32 -j ACCEPT
+  
+  # 保存恢复
+  iptables-save > /etc/sysconfig/iptables
+  iptables-restore < /etc/sysconfig/iptables
+  ```
+
++ **firewall-cmd**
+
+  **区域（zone）**：针对特定位置或场景（例如家庭、公共、受信任等）可能具有的各种信任级别的规则集。即每个zone里面有不同的iptables规则。
+  
+  ```shell
+  # 从不信任到信任的顺序排序
+  1. drop: 任何接收的网络数据包都被丢弃，没有任何回复。仅能有发送出去的网络连接
+  2. block: 阻塞区域会拒绝进入的网络连接，返回icmp-host-prohibited（ICMP-主机-禁止），只有服务器已经建立的连接会被通过即只允许由该系统初始化的网络连接
+  # 3. public: 只接受那些被选中的连接，默认只允许 ssh 和 dhcpv6-client。这个 zone 是缺省（即默认）zone
+  4. external: 这个区域相当于路由器的启用伪装（masquerading）选项。只有指定的连接会被接受，即ssh，而其它的连接将被丢弃或者不被接受
+  5. dmz: 如果想要只允许给部分服务能被外部访问，可以在DMZ区域中定义。它也拥有只通过被选中连接的特性，即ssh
+  6. work: 在这个区域，我们只能定义内部网络。比如私有网络通信才被允许，只允许ssh，ipp-client和 dhcpv6-client
+  7. home: 这个区域专门用于家庭环境。它同样只允许被选中的连接，即ssh，ipp-client，mdns，samba-client和 dhcpv6-client。
+  8. inernal: 这个区域和工作区域（Work Zone）类似，只有通过被选中的连接，和home区域一样
+  # 9. trusted: 信任区域允许所有网络通信通过。记住：因为trusted是最被信任的，即使没有设置任何的服务，那么也是被允许的
+  
+  # 匹配原则：（如果一个客户端访问服务器，服务器根据以下原则决定使用哪个 zone 的策略去匹配）
+  1）如果一个客户端数据包的源 IP 地址匹配 zone 的 sources，那么该 zone 的规则就适用这个客户端。一个源只能属于一个zone，不能同时属于多个zone。但是一个zone里可以有多个source。
+  2）如果一个客户端数据包进入服务器的某一个接口（如eth0）区配zone的interfaces（接口），则么该 zone 的规则就适用这个客户端；一个接口只能属于一个zone，不能同时属于多个zone。但是一个zone里可以有多个接口。
+  3）如果上述两个原则都不满足，那么缺省的 zone 将被应用
+  ```
+  
+  ```shell
+  # /etc/firewalld/zones 正使用的zone配置文件
+  # firewall-cmd --reload 重载配置
+  
+  # firewall-cmd --get-active-zones 查看所有正使用的zone
+  # firewall-cmd --get-zone-of-interface=ens33  查询网卡所在zone
+  # firewall-cmd --zone=public --add-interface=lo 给指定网卡设置zone
+  # firewall-cmd --zone=dmz --change-interface=lo 针对网卡更改zone
+  # firewall-cmd --zone=dmz --remove-interface=lo 针对网卡删除zone
+  
+  # firewall-cmd --get-services 查看所有的servies
+  # firewall-cmd --list-services --zone=public 查看zone下的service
+  # firewall-cmd --permanent --zone=public --remove-service=ssh  移除service
+  # firewall-cmd --permanent --zone=public --add-service=https   添加service
+  
+  # firewall-cmd --permanent --zone=trusted --add-source=1.1.0.0/16  添加信任的源
+  ```
+  
+  ```
+  https://blog.csdn.net/javaldk/article/details/122590998
+  https://www.ahaoyw.com/article/45.html
+  ```
+  
++ **tcpdump**
+
+  ```shell
+  -i any
+  ```
+
++ **/etc/sysconfig/network-scripts/**
+
+  ```
+  BOOTPROTO=dhcp
+  DEVICE=eth0
+  ONBOOT=yes
+  TYPE=Ethernet
+  USERCTL=no
+  IPADDR=172.16.0.4
+  NETMASK=255.240.0.0
+  NETWORK=172.16.0.0
+  BROADCAST=172.31.255.255
+  
+  # systemctl restart network
+  ```
+
+  
+
+
+

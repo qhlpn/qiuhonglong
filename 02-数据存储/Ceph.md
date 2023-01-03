@@ -66,6 +66,13 @@
           gpgcheck=0
           priority=1
       yum repolist
+      
+      # ceph-stable
+      [ceph_stable]
+      baseurl = https://download.ceph.com//rpm-nautilus/el7/$basearch
+      gpgcheck = 1
+      gpgkey = https://download.ceph.com/keys/release.asc
+      name = Ceph Stable repo
       ```
 
     + 磁盘分区
@@ -77,6 +84,7 @@
       pvcreate /dev/sdb # 将物理磁盘初始化为物理卷 PV
       vgcreate ceph /dev/sdb # 创建卷组 VG，并将 PV 加入 VG
       lvcreate -n osd -L 10G ceph # 基于卷组 VG 创建逻辑卷 LV
+      lvcreate -n osd0 -l 33%vg ceph
       mkfs.xfs /dev/ceph/osd # 格式化
       mount /dev/ceph/osd /mnt # 挂载
       df -h
@@ -722,6 +730,8 @@ osd_heartbeat_interval = 5
   # 取消映射
   rbd device unmap /dev/rbd0
   rbd device ls
+  
+  rbd --id admin -m 192.168.211.35:6789,192.168.211.36:6789,192.168.211.37:6789 --keyfile=/tmp/csi/keys/keyfile-692396551 map istack-test/csi-vol-ce42da0f-8b42-11ed-ae4c-0000007c4c28 --device-type krbd --options noudev
   ```
 
 + 磁盘逻辑卷操作
@@ -831,6 +841,14 @@ osd_heartbeat_interval = 5
 
 > 接口高可用：keepalived（VIP：虚拟IP）+ haproxy（负载均衡）
 
+```
+radosgw-admin user create --uid admin --display-name "Admin User" --caps "buckets=*;users=*;usage=read;metadata=read;zone=read"
+
+radosgw-admin user info --uid=demo --tenant=demo
+```
+
+
+
 
 
 #### 2.7 cephfs 文件存储
@@ -895,42 +913,32 @@ ceph osd setcrushmap -i newcrushmap
 + 顺序写（测吞吐量）
 
   ``` shell
-  fio -filename= -direct=1 -iodepth 1 -thread -rw=write -ioengine=psync -bs=1M -size=200m -numjobs=30 -runtime=60 -group_reporting -name=mytest
+  fio -direct=1 -iodepth=32 -rw=write -ioengine=libaio -bs=1024k -numjobs=1 -time_based=1 -runtime=300 -group_reporting -filename=iotest -name=test -size=10G
   ```
 
 + 顺序读（测吞吐量）
 
   ``` shell
-  fio -filename= -direct=1 -iodepth 1 -thread -rw=read -ioengine=psync -bs=1M -size=1G -numjobs=30 -runtime=60 -group_reporting -name=mytest
-  ```
-
-+ 混合顺序读写（测吞吐量）
-
-  ``` shell
-  fio -filename= -direct=1 -iodepth 1 -thread -rw=rw -rwmixread=50 -ioengine=psync -bs=1M -size=1G -numjobs=30 -runtime=60 -group_reporting -name=mytest
+  fio -direct=1 -iodepth=32 -rw=read -ioengine=libaio -bs=1024k -numjobs=1 -time_based=1 -runtime=300 -group_reporting -filename=iotest -name=test -size=10G
   ```
 
 + 随机写（测IOPS）
 
   ``` shell
-  fio -filename= -direct=1 -iodepth 1 -thread -rw=randwrite -ioengine=psync -bs=4k -size=200m -numjobs=30 -runtime=60 -group_reporting -name=mytest
+  fio -direct=1 -iodepth=32 -rw=randwrite -ioengine=libaio -bs=4k -numjobs=4 -time_based=1 -runtime=300 -group_reporting -filename=iotest -name=test -size=10G
   ```
 
 + 随机读（测IOPS）
 
   ``` shell
-  fio -filename= -direct=1 -iodepth 1 -thread -rw=randread -ioengine=psync -bs=4k -size=1G -numjobs=30 -runtime=60 -group_reporting -name=mytest
-  ```
-
-+ 混合随机读写（测IOPS）
-
-  ``` shell
-  fio -filename= -direct=1 -iodepth 1 -thread -rw=randrw -rwmixread=50 -ioengine=psync -bs=1M -size=1G -numjobs=30 -runtime=60 -group_reporting -name=mytest
+  fio -direct=1 -iodepth=32 -rw=randread -ioengine=libaio -bs=4k -numjobs=4 -time_based=1 -runtime=300 -group_reporting -filename=iotest -name=test -size=10G
   ```
 
 > 1. 测试随机读写时，numjobs从8开始，12..16..20..逐渐往上加，直到IOPS不再上升
 > 2. 测试顺序读写时，numjobs从1开始，2..3..4..往上加，基本思路与以上描述一致
 > 3. 测试随机读写时要关注IOPS，不要关注IO吞吐；测试顺序读写时要关注IO吞吐，不要关注IOPS
+
+
 
 #### 2.11 qos
 
@@ -942,11 +950,13 @@ ceph
 
 ​	At the pool level: `rbd config pool set $pool rbd_qos_iops_limit 10`
 
-cgroup
-
-http://www.manongjc.com/article/90348.html
+cgroup  http://www.manongjc.com/article/90348.html
 
 
+
+#### 2.12 nbd
+
+<img src="E:\projects\qiuhonglong\02-数据存储\pictures\image-20221205214439245.png" alt="image-20221205214439245" style="zoom: 67%;" />
 
 
 
@@ -1143,5 +1153,13 @@ librbd::Operations: snapshot is protected
 
 # rbd snap unprotect
 cannot unprotect: at least 2 children
+```
+
+#### 3.8 cache
+
+```
+当CPU采用高速缓存时，它的写内存操作有两种模式：
+一种称为“穿透”(Write-Through)模式，在这种模式中高速缓存对于写操作就好像不存在一样，每次写时都直接写到内存中，所以实际上只是对读操作使用高速缓存，因而效率相对较低。
+另一种称为“回写”(Write-Back)模式，写的时候先写入高速缓存，然后由高速缓存的硬件在周转使用缓冲线时自动写入内存，或者由软件主动地“冲刷”有关的缓冲线。
 ```
 
