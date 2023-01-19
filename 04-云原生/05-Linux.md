@@ -976,6 +976,23 @@ grep ^ /sys/block/*/queue/rotational
   make install
   ```
 
+  **example：**
+
+  ``` shell
+  yum group install "Compatibility Libraries" -y
+  yum group install "Development Tools" -y
+  yum install -y libuuid-devel libblkid-devel gcc zlib-devel openssl-devel kernel-devel kernel-headers
+  wget https://github.com/openzfs/zfs/releases/download/zfs-2.1.6/zfs-2.1.6.tar.gz
+  tar -xzvf zfs-2.1.6.tar.gz
+  cd zfs-2.1.6
+  ./configure
+  make
+  make install
+  depmod -a
+  modprobe zfs
+  echo zfs > /etc/modules-load.d/zfs.conf
+  ```
+
   **方法二：**
 
   ```shell
@@ -984,6 +1001,42 @@ grep ^ /sys/block/*/queue/rotational
   rpmbuild -bb your-package.specs       #一个和你的软件包同名的specs文件
   # 这时在/usr/src/redhat/RPM/i386/（根据具体包的不同，也可能是i686,noarch等等）在这个目录下，有一个新的rpm包，这个是编译好的二进制文件。
   rpm -i new-package.rpm
+  ```
+
+  **example**
+
+  ``` shell
+  cd /root
+  wget "https://github.com/markfasheh/ocfs2-tools/releases/tag/ocfs2-tools-1.8.6"
+  tar -zxvf ocfs2-tools-ocfs2-tools-1.8.6.tar.gz
+  mv ocfs2-tools-ocfs2-tools-1.8.6 ocfs2-tools-1.8.6
+  mkdir ocfs2-tool
+  
+  cd /root/ocfs2-tools-1.8.6
+  cat vendor/common/ocfs2-tools.spec-generic.in
+  
+  cp vendor/common/ocfs2-tools.spec-generic.in ../ocfs2-tool/ocfs2-tools.spec
+  cd /root/ocfs2-tool
+  modify ocfs2-tools.spec # https://blog.csdn.net/weixin_40747106/article/details/104880783
+  
+  cd /root/ocfs2-tools-1.8.6
+  vi Preamble.make
+  modify to # CFLAGS += -pipe -Wno-format-security -D_DEFAULT_SOURCE=1
+  autoconf # 只有configure.am或configure.in文件时，用autoconf命令来生成configure
+  cat .configure
+  
+  cd /root
+  tar zcvf ocfs2-tools-1.8.6.tar.gz ocfs2-tools-1.8.6/
+  cd /root/ocfs2-tool
+  mkdir rpmbuild && cd rpmbuild && mkdir BUILD BUILDROOT RPMS SOURCES SPECS SRPM
+  
+  cd /root/ocfs2-tool
+  mv ../ocfs2-tools-1.8.6.tar.gz rpmbuild/SOURCES/ocfs2-tools-1.8.6.tar.gz
+  make clean
+  rpmbuild --bb ocfs2-tools.spec --define "_topdir /root/ocfs2-tool/rpmbuild"
+  
+  ls /root/ocfs2-tool/rpmbuild/RPMS/x86_64/
+  rpm -ivh ocfs2-tools-1.8.6-1.x86_64.rpm
   ```
 
 + **lsmod**
@@ -1000,6 +1053,7 @@ grep ^ /sys/block/*/queue/rotational
   ```shell
   depmod -a
   # 我编译了一个新的wifi驱动r8192se_pci.ko，将其拷贝到/lib/modules/2.6.31-20-generic/wireless下，然后到/lib/modules/2.6.31-20-generic运行depmod -a，之后可以在任意目录运行modprobe r8192se_pci。
+  cat modules.dep 
   ```
 
 + **configure + make + make install**
@@ -1007,6 +1061,134 @@ grep ^ /sys/block/*/queue/rotational
   https://www.cnblogs.com/lemonning/p/10341228.html
 
   https://www.cnblogs.com/liujuncm5/p/6713784.html
+  
++ **kernel**
+
+  **编译 ocfs2.ko**
+  
+  ``` shell
+  cd /etc/yum.repos.d/
+  wget "https://mirrors.aliyun.com/repo/Centos-8.repo?spm=a2c6h.25603864.0.0.1d2f5969F1ac22"
+  wget "https://mirrors.aliyun.com/repo/epel-archive-8.repo?spm=a2c6h.25603864.0.0.1d2f5969F1ac22"
+  yum clean all
+  yum makecache
+  
+  # kernel dev
+  yum install kernel-devel kernel-headers elfutils-libelf-devel 
+  # gcc lib
+  yum install -y libuuid-devel libblkid-devel gcc bc zlib-devel openssl-devel ncurses-devel libaio-devel readline-devel glib2-devel
+  # dev tool
+  yum group install "Compatibility Libraries" -y
+  yum group install "Development Tools" -y
+  
+  cd /root
+  wget "https://vault.centos.org/8.0.1905/BaseOS/Source/SPackages/kernel-4.18.0-80.el8.src.rpm" 
+  rpm -ivh kernel-4.18.0-80.el8.src.rpm
+  cd rpmbuild/SOURCES/
+  tar Jxvf linux-4.18.0-80.el8.tar.xz -C /usr/src/kernels/
+  
+  cd /usr/src/kernels/
+  mv linux-4.18.0-80.el8/ $(uname -r)
+  
+  cd 4.18.0-80.el8.x86_64/
+  make mrproper
+  cp ../4.18.0-348.7.1.el8_5.x86_64/Module.symvers ./
+  cp /boot/config-$(uname -r) ./.config
+  
+  make menuconfig
+  <M> OCFS2 file system support
+  
+  cat .config | grep -i ocfs2
+  CONFIG_OCFS2_FS=m
+  CONFIG_OCFS2_FS_O2CB=m
+  CONFIG_OCFS2_FS_USERSPACE_CLUSTER=m
+  CONFIG_OCFS2_FS_STATS=y
+  CONFIG_OCFS2_DEBUG_MASKLOG=y
+  
+  grep -i CONFIG_SYSTEM_TRUSTED_KEYS .config
+  modify to # CONFIG_SYSTEM_TRUSTED_KEYS=""
+  
+  
+  # make prepare
+  # make scripts
+  # make CONFIG_OCFS2_FS=m CONFIG_OCFS2_FS_O2CB=m CONFIG_OCFS2_FS_USERSPACE_CLUSTER=m -C /usr/src/kernels/4.18.0-408.el8.x86_64 M=/usr/src/kernels/4.18.0-408.el8.x86_64/fs/ocfs2 modules
+  
+  make
+make modules_install
+  make install
+  
+  cd /lib/modules
+  ls 4.18.0/kernel/fs/ocfs2/  -lh
+  cp -r 4.18.0/kernel/fs/ocfs2  4.18.0-80.el8.x86_64/kernel/fs/
+  depmod -a
+  
+  cd /etc/sysconfig/modules/
+  vi ocfs2.modules  # 开机自动加载
+  modprobe -- ocfs2
+  modprobe -- ocfs2_stackglue
+  modprobe -- ocfs2_stack_o2cb
+  modprobe -- ocfs2_stack_user
+  modprobe -- ocfs2_nodemanager
+  modprobe -- ocfs2_dlm
+  modprobe -- ocfs2_dlmfs
+  chmod 755 ocfs2.modules # 755权限
+  
+  lsmod | grep ocfs
+  ```
+  
+  **编译 nbd.ko** 
+  
+  ```shell
+  # 查看OS和内核版本
+  cat /etc/redhat-release
+  uname -r
+   
+  # CentOS Linux release 7.5.1804
+  # kernel-3.10.0-862.el7
+  
+  # 安装编译工具包
+  yum group install "Compatibility Libraries" -y
+  yum group install "Development Tools" -y
+  yum install -y libuuid-devel libblkid-devel gcc zlib-devel openssl-devel
+  
+  # 安装对应版本的rpm包
+  yum install kernel-devel kernel-headers elfutils-libelf-devel
+  # 下载对应版本内核源码
+  wget https://mirrors.aliyun.com/centos-vault/7.5.1804/os/Source/SPackages/kernel-3.10.0-862.el7.src.rpm
+   
+  rpm -ihv kernel-3.10.0-862.el7.src.rpm
+  cd ~/rpmbuild/SOURCES
+  tar Jxvf linux-3.10.0-862.el7.tar.xz -C /usr/src/kernels/
+  cd /usr/src/kernels/
+  mv linux-3.10.0-862.el7 $(uname -r)
+  cd $(uname -r)
+  # 清理旧的编译生成文件及其他配置文件(.config)，make clean则不会删除配置文件
+  make mrproper
+  # 从yum安装的内核文件夹中复制Module.symvers，声明调用内核提供的各种接口
+  cp ../3.10.0-862.14.4.el7.x86_64/Module.symvers ./
+  # 复制当前系统的内核配置文件
+  cp /boot/config-$(uname -r) ./.config
+  make oldconfig
+  make prepare
+  make scripts
+  # 修复编译出错 error: 'REQ_TYPE_SPECIAL' undeclared
+  sed -i "s/sreq.cmd_type =.*/sreq.cmd_type = 7;/g" drivers/block/nbd.c
+  make CONFIG_BLK_DEV_NBD=m M=drivers/block
+  # 报错 make[1]: *** No rule to make target tools/objtool/objtool', needed bydrivers/block/floppy.o'. Stop. 则加上 CONFIG_STACK_VALIDATION=
+  cp drivers/block/nbd.ko /lib/modules/$(uname -r)/kernel/drivers/block/
+  # 加载驱动
+  depmod -a
+  # 查看驱动信息
+  modinfo nbd
+   
+  # 修改nbd配置: /etc/modprobe.d/nbd.conf
+  # max_part：块设备支持的最大分区数，默认值为0，不修改的话部分情况会无法显示分区
+  # nbds_max: nbd设备(即/dev/nbd*)的个数， 设备系统默认只有16个，根据实际情况酌情修改，不能高于255
+  echo "options nbd max_part=16 nbds_max=99" >> /etc/modprobe.d/nbd.conf
+  modprobe nbd
+  ```
+  
+  
 
 ##### Nginx
 
@@ -1236,7 +1418,7 @@ grep ^ /sys/block/*/queue/rotational
 + **/etc/sysconfig/network-scripts/**
 
   ```
-  BOOTPROTO=dhcp
+  BOOTPROTO=static/dhcp
   DEVICE=eth0
   ONBOOT=yes
   TYPE=Ethernet
@@ -1247,6 +1429,49 @@ grep ^ /sys/block/*/queue/rotational
   BROADCAST=172.31.255.255
   
   # systemctl restart network
+  ```
+
++ **route**
+
+  ```shell
+  # route  [add|del] [-net|-host] target [netmask Nm] [gw Gw] [[dev] If]
+  # add : 添加一条路由规则
+  # del : 删除一条路由规则
+  # -net : 目的地址是一个网络
+  # -host : 目的地址是一个主机
+  # target : 目的网络或主机
+  # netmask : 目的地址的网络掩码
+  # gw : 路由数据包通过的网关
+  # dev : 为路由指定的网络接口
+  
+  route add net 0.0.0.0 netmask 0.0.0.0 gw 192.168.2.1 dev eth0
+  # route -n
+  Kernel IP routing table
+  Destination     Gateway         Genmask         Flags Metric Ref    Use Iface
+  0.0.0.0         192.168.2.1     0.0.0.0         UG    0      0        0 eth0
+  192.168.2.0     0.0.0.0         255.255.255.0   U     100    0        0 eth0
+  ```
+
+  **/etc/sysconfig/static-routes**
+
+  ```shell
+  # 持久化配置
+  any net 0.0.0.0 netmask 0.0.0.0 gw 192.168.2.1 dev eth0
+  
+  # static-routes文件是network脚本执行时调用的一个文件
+  # Add non interface-specific static-routes
+  if [ -f /etc/sysconfig/static-routes ]; then
+  	grep "^any" /etc/sysconfig/static-routes | while read ignore args; do
+      	/sbin/route add -$args
+      done
+  fi
+  ```
+
++ **ip**
+
+  ``` shell
+  ip route add  0.0.0.0/0 via 192.168.2.1 dev eth0
+  ip route
   ```
 
   
