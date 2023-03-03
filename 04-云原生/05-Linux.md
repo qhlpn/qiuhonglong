@@ -142,15 +142,40 @@ grep ^ /sys/block/*/queue/rotational
   pidof sshd
   ```
 
-+ **strace**：
++ **strace**：跟踪系统调用和信号
 
-+ **ulimit**：
+  ```shell
+  strace -p pid
+  ```
 
-+ **dmesg**：
++ **ulimit**：用于限制 shell 启动进程所占用的资源
+
+  ```shell
+  # https://cloud.tencent.com/developer/article/1656809
+  
+  # /etc/security/limits.conf
+  
+  # ulimit只在当前的 session 有效
+  # limits.conf中可以根据用户和限制项使用户在下次登录中生效
+  
+  # 文件句柄被限制的话，进程运行会变慢（比如: K8S创建虚机变慢，CSI挂载磁盘变慢）
+  ```
+
++ **dmesg**：用于检查和控制内核的环形缓冲区
 
 + **kill**：用于终止某个指定PID值的服务进程。kill [参数] 进程的PID
 
   **killall**：用于终止某个指定名称的服务所对应的全部进程。killall [参数] 服务名称
+
+  **pkill**：用于终止某个指定名称的服务所对应的全部进程
+
+  ``` shell
+  # Linux 踢出多余TTY连接终端（解决连接被占用，没法连接问题）
+  # who
+  root tty1
+  root ttyS0
+  # pkill -kill -t ttyS0
+  ```
 
 + **ifconfig**：用于获取网卡配置与网络状态等信息
 
@@ -183,6 +208,25 @@ grep ^ /sys/block/*/queue/rotational
 + **ping**
 
   **tracepath**：用于显示数据包达到目的主机途中所经过的路由信息
+
+  **nc**：扫描端口
+
+  ```shell
+  -u 使用UDP传输协议。
+  -v 显示指令执行过程。
+  -w<超时秒数> 设置等待连线的时间。
+  -z 使用0输入/输出模式，只在扫描通信端口时使用。
+  [root@localhost ~]# nc -v -z -w2 192.168.0.3 1-100 
+  192.168.0.3: inverse host lookup failed: Unknown host
+  (UNKNOWN) [192.168.0.3] 80 (http) open
+  (UNKNOWN) [192.168.0.3] 23 (telnet) open
+  (UNKNOWN) [192.168.0.3] 22 (ssh) open
+  [root@localhost ~]# nc -u -z -w2 192.168.0.1 1-1000  # 扫描192.168.0.3 的端口 范围是 1-1000
+  [root@localhost ~]# nc -vz acme-v02.api.letsencrypt.org 443 -w2
+  Ncat: Version 7.50 ( https://nmap.org/ncat )
+  Ncat: Connected to 23.77.214.183:443.
+  Ncat: 0 bytes sent, 0 bytes received in 0.07 seconds.
+  ```
 
 + **netstat**：netstat -antupl
 
@@ -469,6 +513,12 @@ grep ^ /sys/block/*/queue/rotational
   | 命令 < 文件            | 将文件作为命令的标准输入                     |
   | 命令 << 分界符 eg: EOF | 从标准输入中读入，直到遇见分界符才停止       |
   | 命令 < 文件1 > 文件2   | 将文件1作为命令的标准输入并将标准输出到文件2 |
+
+  ``` shell
+  cat << EOF > demo.txt
+  Hello World
+  EOF
+  ```
 
 + 输出重定向（to outside）
 
@@ -936,11 +986,46 @@ grep ^ /sys/block/*/queue/rotational
   End? 33%
   ```
 
-  
++ **udev**
+
+  ``` shell
+  # udev
+  cat <<"EOF"> /etc/udev/rules.d/sgio.sh
+  #!/bin/bash
+  DEVPATH=$1
+  MAJOR=$2
+  MINOR=$3
+  DATE=$(date "+%Y-%m-%d %H:%M:%S")
+  echo $DATE flag sgio $DEVPATH $MAJOR $MINOR >> /etc/udev/rules.d/sgio.log
+  cat /sys/dev/block/$MAJOR\:$MINOR/queue/unpriv_sgio 2>> /etc/udev/rules.d/sgio.log
+  if [ $? -eq 0 ]; then
+      SGIO=$(cat /sys/dev/block/$MAJOR\:$MINOR/queue/unpriv_sgio)
+      echo $DATE /sys/dev/block/$MAJOR\:$MINOR/queue/unpriv_sgio is $SGIO >> /etc/udev/rules.d/sgio.log
+      if [ $SGIO == 0 ]; then
+          echo $DATE set sgio to 1 >> /etc/udev/rules.d/sgio.log
+          echo 1 > /sys/dev/block/$MAJOR\:$MINOR/queue/unpriv_sgio
+      fi
+  fi
+  EOF
+  chmod 777 /etc/udev/rules.d/sgio.sh
+  cat <<EOF> /etc/udev/rules.d/10-scsi-sgio.rules
+  ACTION=="add",SUBSYSTEMS=="scsi",DRIVERS=="sd",SUBSYSTEM=="block",RUN+="/etc/udev/rules.d/sgio.sh %N %M %m"
+  EOF
+  udevadm trigger
+  udevadm control --reload
 
 
 
 ##### 模块安装
+
++ **yum**
+
+  ``` shell
+  yum list installed | grep mysql
+  
+  yum --showduplicates list <package name> | expand
+  yum install <package name>-<version info>
+  ```
 
 + **rpm**
 
@@ -1048,6 +1133,12 @@ grep ^ /sys/block/*/queue/rotational
   modprobe -r
   ```
 
+  ```shell
+  # 配置开机自动加载
+  echo "modprobe -- zfs "  >> /etc/sysconfig/modules/zfs.modules
+  chmod 755 /etc/sysconfig/modules/zfs.modules
+  ```
+
 + **depmod**
 
   ```shell
@@ -1114,7 +1205,7 @@ grep ^ /sys/block/*/queue/rotational
   # make CONFIG_OCFS2_FS=m CONFIG_OCFS2_FS_O2CB=m CONFIG_OCFS2_FS_USERSPACE_CLUSTER=m -C /usr/src/kernels/4.18.0-408.el8.x86_64 M=/usr/src/kernels/4.18.0-408.el8.x86_64/fs/ocfs2 modules
   
   make
-make modules_install
+  make modules_install
   make install
   
   cd /lib/modules
@@ -1249,7 +1340,7 @@ make modules_install
   
       server {
           listen 443 ssl;
-          server_name  gogs.ctcdn.cn;    # support regex
+          server_name  gogs.ctcdn.cn;    # support regex     ~istack\-ai\-?[\w]*\.ctcdn\.cn;
   
           ssl_certificate ssl/ctcdn.cn.crt;
           ssl_certificate_key ssl/ctcdn.cn.key;
@@ -1286,7 +1377,7 @@ make modules_install
                proxy_pass http://minio;
           }
       }
-  
+      
   }
   ```
 
@@ -1476,5 +1567,12 @@ make modules_install
 
   
 
+##### cloud-init
 
+https://zhuanlan.zhihu.com/p/453495129
 
+https://xixiliguo.github.io/linux/cloud-init.html
+
+https://blog.csdn.net/nanhai_happy/article/details/125148888
+
+https://access.redhat.com/documentation/zh-cn/red_hat_enterprise_linux/8/html/configuring_and_managing_cloud-init_for_rhel_8/introduction-to-cloud-init_cloud-content

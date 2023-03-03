@@ -68,11 +68,16 @@
       yum repolist
       
       # ceph-stable
-      [ceph_stable]
-      baseurl = https://download.ceph.com//rpm-nautilus/el7/$basearch
-      gpgcheck = 1
-      gpgkey = https://download.ceph.com/keys/release.asc
-      name = Ceph Stable repo
+      [ceph-noarch] 
+      name=Ceph noarch 
+      baseurl=https://mirrors.aliyun.com/ceph/rpm-nautilus/el7/noarch/ 
+      enabled=1 
+      gpgcheck=0 
+      [ceph-x86_64] 
+      name=Ceph x86_64 
+      baseurl=https://mirrors.aliyun.com/ceph/rpm-nautilus/el7/x86_64/ 
+      enabled=1 
+      gpgcheck=0
       ```
 
     + 磁盘分区
@@ -358,6 +363,9 @@ ansible-playbook site.yml
      ```shell
      systemctl start ceph-mgr@node-1
      systemctl enable ceph-mgr@node-1
+     
+     # 如果日志有模块加载失败，pip install包即可，注意将包文件权限调高
+     https://blog.csdn.net/jsut_rick/article/details/119000850
      ```
 
   + 启动 mgr.dashboard 模块
@@ -688,7 +696,7 @@ osd_heartbeat_interval = 5
   > https://docs.ceph.com/en/latest/rados/operations/pools/#
 
   ```shell
-  ceph osd pool create poolName 64 64   -- replicated[default] 副本 | erasure 纠删码
+  ceph osd pool create poolName 64 64  <replicated + rule>
   
   PGs = ((total_number_of_OSD * 100) / max_replication_count) / pool_count
   结算的结果往上取靠近2的N次方的值。比如总共OSD数量是160，复制份数3，pool数量也是3，那么每个pool分配的PG数量就是2048
@@ -701,6 +709,7 @@ osd_heartbeat_interval = 5
   ceph osd lspools
   ceph osd pool get poolName pg_num    
   ceph osd pool set poolName pg_num 128
+  ceph osd pool set poolName crush_rule rule
   ceph osd pool delete {pool-name} [{pool-name} --yes-i-really-really-mean-it]
   ```
 
@@ -750,37 +759,44 @@ osd_heartbeat_interval = 5
 
   ```shell
   rbd trash mv {pool-name}/{image-name}      # 移至回收站 
-  rbd trash restore {pool-name}/{image-id}   # 从回收站恢复
-  rbd trash rm {pool-name}/{image-id}        # 删除回收站
+  rbd trash ls {pool-name}
+  rbd trash restore {trashID}    # 从回收站恢复
+  rbd trash rm {trashID}         # 删除回收站
   ```
 
-+ RBD快照克隆（COW）
++ RBD快照克隆**（COW）**
 
-  > https://docs.ceph.com/en/latest/rbd/rbd-snapshot/
-  >
-  > https://zhangchenchen.github.io/2017/06/05/ceph-rbd-snapshot/
-
-  + 增量快照
+  ``` shell
+  Ceph supports the ability to create many copy-on-write (COW) clones of a block device snapshot. Snapshot layering enables Ceph block device clients to create images very quickly.
+  
+  Ceph的 RBD快照和克隆均采用了COW机制，在对 RBD进行创建快照和克隆操作时，此过程不会涉及数据复制，故这些操作可瞬时完成
+  
+  
+  https://developer.aliyun.com/article/794631
+  https://www.modb.pro/db/50691
+  https://www.jianshu.com/p/8b8e1e23430a
+  https://docs.ceph.com/en/latest/rbd/rbd-snapshot/
+  ```
+  
+  + **COW vs ROW**
+    
     + COW(Copy-On-Write)：写时复制，**COW 在创建快照时，并不会发生物理的数据拷贝动作**，仅是拷贝了原始数据所在的源数据块的物理位置元数据。**在创建了快照之后，**一旦源数据块中的原始数据被改写，则会将源数据块上的原始数据拷贝到新数据块中，然后将新数据写入到源数据块中覆盖原始数据。其中所有的源数据块就组成了所谓的源数据卷，而新数据块组成了快照卷。 COW 有一个很明显的缺点，就是会降低源数据卷的写性能，因为每次改写新数据，**实际上都进行了两次写操作。**
     
     + ROW(Redirect-On-Write)：写时重定向，创建快照时，ROW 也会 Copy 一份源数据指针表作为快照数据指针表，此时两张表的指针记录都相同的。在创建快照之后，也就是在快照时间点之后，发生了写操作，那么**新数据会直接被写入到快照卷中**，然后再更新源数据指针表的记录，使其指向新数据所在的快照卷地址。为了保证快照数据的完整性，在创建快照时，源数据卷状态会由读写**变成只读的**。如果做了多次快照，**就产生了一个快照链**，磁盘卷始终挂载在快照链的最末端。
-  
+    
     + **区别：**COW 的快照卷存放的是原始数据，而 ROW 的快照卷存放的是新数据。
     
     + **COW的优缺点**
     
       优势：COW 在进行快照操作之前，不会占用任何的存储资源，也不会影响系统性能。
     
-      劣势：降低源数据卷的写性能。当修改源数据时，会发生两次写操作：将源数据写入快照卷中，将新数据写入源数据卷中。
+      劣势：1. 降低源数据卷的写性能。当修改源数据时，**会发生两次写操作**：将源数据写入快照卷中，将新数据写入源数据卷中。2. 如果主机写入数据频繁，那么这种方式将非常消耗I/O。
     
-      如果主机写入数据频繁，那么这种方式将非常消耗I/O。
+    + **ROW的优缺点**
     
-    + 优势：不会降低源数据卷的写性能。源数据卷创建快照后的写操作会被重定向，所有的写 I/O 都被重定向到新卷中，而所有快照卷数据(旧数据)均保留在只读的源数据卷中。因此更新源数据只需要一个写操作，解决了 COW 写两次的性能问题。
+    + 优势：不会降低源数据卷的写性能。源数据卷创建快照后的写操作会被重定向，所有的写 I/O 都被重定向到新卷中，而所有快照卷数据(旧数据)均保留在只读的源数据卷中。**因此更新源数据只需要一个写操作，解决了 COW 写两次的性能问题**。
     
-      劣势：
-    
-      1. 没有一个完整的快照卷。ROW 的快照卷数据映射表保存的是源数据卷的原始副本，而源数据卷数据指针表保存的则是更新后的副本。因此，当创建了多个快照时，会产生一个快照链，使原始数据的访问快照卷和源数据卷数据的追踪以及快照的删除将变得异常复杂。在恢复快照时会不断地合并快照文件，造成较大的系统开销。
-      2. 单机读性能下降。由于采用了重定向写，**使得原本连续的源数据分散到了快照数据卷中**，连续写变成了随机写，**造成读性能下降。**
+      劣势：1没有一个完整的快照卷。ROW 的快照卷数据映射表保存的是源数据卷的原始副本，而源数据卷数据指针表保存的则是更新后的副本。因此，当创建了多个快照时，会产生一个快照链，使原始数据的访问快照卷和源数据卷数据的追踪以及快照的删除将变得异常复杂。在恢复快照时会不断地合并快照文件，造成较大的系统开销。2. 单机读性能下降。由于采用了重定向写，**使得原本连续的源数据分散到了快照数据卷中**，连续写变成了随机写，**造成读性能下降。**
     
   + 基础操作
   
@@ -1076,7 +1092,7 @@ cgroup  http://www.manongjc.com/article/90348.html
 | Stale      | 未刷新态。 PG 存储的所有 OSD 都挂掉（单个挂掉可转移）；或者 Mon 没有检测到 OSD Primary 统计信息（网络抖动） |
 | Down       | 宕机态。当前剩余在线的 OSD 不足以完成数据修复                |
 
-#### 3.7 ceph csi
+#### 3.7 csi
 
 https://github.com/ceph/ceph-csi/blob/devel/docs/design/proposals/rbd-snap-clone.md
 
@@ -1094,8 +1110,29 @@ https://github.com/ceph/ceph-csi/blob/devel/docs/design/proposals/rbd-snap-clone
 [rbd_util.go:1266] ID: 676 Req-ID: snapshot-d47037e9-68a9-48ef-bb66-bd3981997506 rbd: snap create rbd/csi-vol-387c2163-6bfd-11ed-90a1-0000006cf3fe@csi-snap-ed39d536-6bfd-11ed-90a1-0000006cf3fe using mon 192.168.211.31:6789
 [rbd_util.go:1325] ID: 676 Req-ID: snapshot-d47037e9-68a9-48ef-bb66-bd3981997506 rbd: clone rbd/csi-vol-387c2163-6bfd-11ed-90a1-0000006cf3fe@csi-snap-ed39d536-6bfd-11ed-90a1-0000006cf3fe rbd/csi-snap-ed39d536-6bfd-11ed-90a1-0000006cf3fe (features: [deep-flatten layering]) using mon 192.168.211.31:6789
 [rbd_util.go:1279] ID: 676 Req-ID: snapshot-d47037e9-68a9-48ef-bb66-bd3981997506 rbd: snap rm rbd/csi-vol-387c2163-6bfd-11ed-90a1-0000006cf3fe@csi-snap-ed39d536-6bfd-11ed-90a1-0000006cf3fe using mon 192.168.211.31:6789
-[rbd_util.go:1266] ID: 676 Req-ID: snapshot-d47037e9-68a9-48ef-bb66-bd3981997506 rbd: snap create rbd/csi-vol-387c2163-6bfd-11ed-90a1-0000006cf3fe@csi-snap-ed39d536-6bfd-11ed-90a1-0000006cf3fe using mon 192.168.211.31:6789
+[rbd_util.go:1266] ID: 676 Req-ID: snapshot-d47037e9-68a9-48ef-bb66-bd3981997506 rbd: snap create rbd/csi-snap-ed39d536-6bfd-11ed-90a1-0000006cf3fe@csi-snap-ed39d536-6bfd-11ed-90a1-0000006cf3fe using mon 192.168.211.31:6789
 [rbd_util.go:704] ID: 676 Req-ID: snapshot-d47037e9-68a9-48ef-bb66-bd3981997506 clone depth is (1), configured softlimit (4) and hardlimit (8) for rbd/csi-snap-ed39d536-6bfd-11ed-90a1-0000006cf3fe
+
+
+---
+rbd snap ls <RBD image for src k8s volume> --all
+
+// If the parent has more snapshots than the configured `maxsnapshotsonimage`
+// add background tasks to flatten the temporary cloned images (temporary cloned
+// image names will be same as snapshot names)
+ceph rbd task add flatten <RBD image for temporary snap images>
+
+rbd snap create <RBD image for src k8s volume>@<random snap name>
+rbd clone --rbd-default-clone-format 2 --image-feature
+    layering,deep-flatten <RBD image for src k8s volume>@<random snap>
+    <RBD image for temporary snap image>
+rbd snap rm <RBD image for src k8s volume>@<random snap name>
+rbd snap create <RBD image for temporary snap image>@<random snap name>
+
+// check the depth, if the softlimit is reached add a task to flatten the 
+// cloned image and return success. If the depth is reached hardlimit 
+// add a task flatten the cloned image and return snapshot status ready as false
+ceph rbd task add flatten <RBD image for temporary snap image>
 ```
 
 **Deep-flatten** makes `rbd flatten` work on all the snapshots of an image, in addition to the image itself. Without it, snapshots of an image will still rely on the parent, so the parent will not be delete-able until the snapshots are deleted. Deep-flatten makes a parent independent of its clones, even if they have snapshots.
@@ -1107,6 +1144,19 @@ https://github.com/ceph/ceph-csi/blob/devel/docs/design/proposals/rbd-snap-clone
 [rbd_util.go:1187] ID: 685 Req-ID: pvc-ab9bb529-616e-4878-bb6f-ecc2bd3b09ac setting disableInUseChecks: true image features: [layering] mounter: rbd
 [rbd_util.go:1325] ID: 685 Req-ID: pvc-ab9bb529-616e-4878-bb6f-ecc2bd3b09ac rbd: clone rbd/csi-snap-ed39d536-6bfd-11ed-90a1-0000006cf3fe@csi-snap-ed39d536-6bfd-11ed-90a1-0000006cf3fe rbd/csi-vol-c834d502-6bff-11ed-90a1-0000006cf3fe (features: [layering]) using mon 192.168.211.31:6789
 [rbd_util.go:704] ID: 685 Req-ID: pvc-ab9bb529-616e-4878-bb6f-ecc2bd3b09ac clone depth is (2), configured softlimit (4) and hardlimit (8) for rbd/csi-vol-c834d502-6bff-11ed-90a1-0000006cf3fe
+
+---
+// check the depth, if the depth is greater than configured (hardlimit)
+// Add a task to value flatten the cloned image
+ceph rbd task add flatten <RBD image for temporary snap image>
+
+rbd clone --rbd-default-clone-format 2 --image-feature <k8s dst vol config>
+    <RBD image for temporary snap image>@<random snap name>
+    <RBD image for k8s dst vol>
+// check the depth,if the depth is greater than configured hardlimit add a task
+// to flatten the cloned image return ABORT error, if the depth is greater than
+// softlimit add a task to flatten the image and return success
+ceph rbd task add flatten <RBD image for k8s dst vol>
 ```
 
 + rbd delete source
@@ -1127,6 +1177,11 @@ https://github.com/ceph/ceph-csi/blob/devel/docs/design/proposals/rbd-snap-clone
 [rbd_util.go:540] ID: 687 Req-ID: 0001-0024-edeca71c-f155-44da-af0d-9a5d29203f93-0000000000000009-ed39d536-6bfd-11ed-90a1-0000006cf3fe rbd: delete csi-snap-ed39d536-6bfd-11ed-90a1-0000006cf3fe using mon 192.168.211.31:6789, pool rbd
 [rbd_util.go:493] ID: 687 Req-ID: 0001-0024-edeca71c-f155-44da-af0d-9a5d29203f93-0000000000000009-ed39d536-6bfd-11ed-90a1-0000006cf3fe executing [rbd task add trash remove rbd/ffebe9f8d96ba --id admin --keyfile=/tmp/csi/keys/keyfile-647801411 -m 192.168.211.31:6789] for image (csi-snap-ed39d536-6bfd-11ed-90a1-0000006cf3fe) using mon 192.168.211.31:6789, pool rbd
 [cephcmds.go:60] ID: 687 Req-ID: 0001-0024-edeca71c-f155-44da-af0d-9a5d29203f93-0000000000000009-ed39d536-6bfd-11ed-90a1-0000006cf3fe command succeeded: ceph [rbd task add trash remove rbd/ffebe9f8d96ba --id admin --keyfile=***stripped*** -m 192.168.211.31:6789]
+
+---
+rbd snap rm <RBD image for temporary snap image>@<random snap name>
+rbd trash mv <RBD image for temporary snap image>
+ceph rbd task trash remove <RBD image for temporary snap image ID>
 ```
 
 + rbd delete clone
@@ -1155,11 +1210,42 @@ librbd::Operations: snapshot is protected
 cannot unprotect: at least 2 children
 ```
 
+
+
 #### 3.8 cache
 
-```
-当CPU采用高速缓存时，它的写内存操作有两种模式：
-一种称为“穿透”(Write-Through)模式，在这种模式中高速缓存对于写操作就好像不存在一样，每次写时都直接写到内存中，所以实际上只是对读操作使用高速缓存，因而效率相对较低。
-另一种称为“回写”(Write-Back)模式，写的时候先写入高速缓存，然后由高速缓存的硬件在周转使用缓冲线时自动写入内存，或者由软件主动地“冲刷”有关的缓冲线。
-```
+**RBDCache**
 
+| 配置                        | 取值      | 说明                                                         |
+| --------------------------- | --------- | ------------------------------------------------------------ |
+| osd_tier_default_cache_mode | writeback | 当CPU采用高速缓存时，它的写内存操作有两种模式：<br />一种称为“穿透”(Write-Through)模式，在这种模式中高速缓存对于写操作就好像不存在一样，每次写时都直接写到内存中，所以实际上只是对读操作使用高速缓存，因而效率相对较低。<br />另一种称为“回写”(Write-Back)模式，写的时候先写入高速缓存，然后由高速缓存的硬件在周转使用缓冲线时自动写入内存，或者由软件主动地“冲刷”有关的缓冲线。 |
+| rbd_cache                   | true      | whether to enable caching (writeback unless rbd_cache_max_dirty is 0) |
+| rbd_cache_size              | 32M       | Librbd 能使用的最大缓存大小                                  |
+| rbd_cache_max_dirty         | 24M       | 缓存中允许脏数据的最大值，用来控制回写大小，不能超过 rbd_cache_size。超过的话，应用的写入应该会被阻塞， |
+
+
+
+**QEMU/KVM**
+
+guest/host 两重 page cache 会对数据重复保存，带来内存浪费，最好是能绕过一个来提高性能
+
+- 如果 guest os 中的应用使用 direct I/O 方式，guest os 中 page cache 会被绕过。
+- 如果 guest os 使用 no cache 方式，host os 的 page cache 会被绕过。
+
+guest page cache，看起来它主要是作为读缓存，而对于写，没有一种模式是以写入它作为写入结束标志的
+
+| 缓存模式           | 说明                                                         | GUEST OS Page cache | Host OS Page cache | Disk write cache | 被认为数据写入成功 | 数据安全性                                                   |
+| ------------------ | ------------------------------------------------------------ | ------------------- | ------------------ | ---------------- | ------------------ | ------------------------------------------------------------ |
+| cache = unsafe     | 跟 writeback 类似，只是会忽略 GUEST OS 的 flush 操作，完全由 HOST OS 控制 flush | Bypass（？不确定）  | Enter              | Enter            | Host page cache    | 最不安全，只有在特定的场合才会使用                           |
+| Cache=writeback    | I/O 写到 HOST OS Page cache 就算成功，支持 GUEST OS flush 操作。 效率最快，但是也最不安全 | Bypass（？不确定）  | Enter              | Enter            | Host Page Cache    | 不安全. （only for temporary data where potential data loss is not a concern ） |
+| Cache=none         | 客户机的I/O 不会被缓存到 page cache，而是会放在 disk write cache。这种模式对写效率比较好，因为是写到 disk cache，但是读效率不高，因为没有放到 page cache。因此，可以在大 I/O 写需求时使用这种模式。 综合考虑下，基本上这是最优模式，而且是支持实时迁移的唯一模式也就是常说的 O_DIRECT I/O 模式 | Bypass              | Bypass             | Enter            | Disk write cache   | 不安全. 如果要保证安全的话，需要disk cache备份电池或者电容，或者使用 fync |
+| Cache=writethrough | I/O 数据会被同步写入 Host Page cache 和 disk。相当于每写一次，就会 flush 一次，将 page cache 中的数据写入持久存储。这种模式，会将数据放入 Page cache，因此便于将来的读；而绕过 disk write cache，会导致写效率较低。因此，这是较慢的模式，适合于写I/O不大，但是读I/O相对较大的情况，最好是用在小规模的有低 I/O 需求客户机的场景中。 当不需要支持实时迁移时，如果不支持writeback 则可用。也就是常说的 O_SYNC I/O 模式 | Enter               | Enter              | Bypass           | disk               | 安全                                                         |
+
+
+
+**QEMU + Librbd**
+
+- qemu driver 'writeback' 相当于 rbd_cache = true
+- qemu driver ‘writethrough’ 相当于 ‘rbd_cache = true,rbd_cache_max_dirty = 0’
+- qemu driver ‘none’ 相当于 rbd_cache = false
+- 覆盖：QEMU 命令行中的配置 > Ceph 文件中的显式配置 > QEMU 配置 > Ceph 默认配置

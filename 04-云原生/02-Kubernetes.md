@@ -1005,6 +1005,15 @@ Service 解决 Deployment 管理的 Pod IP 动态变化问题
       type: ExternalName # Service类型为ExternalName
       externalName: www.baidu.com # 改成IP地址也可以
     ```
+    
+  + **域名**
+  
+    ```
+    <servicename>.<namespace>.svc.<clusterdomain>
+    servicename为service名称，namespace为service所处的命名空间，clusterdomain是k8s集群设计的域名后缀，默认为cluster.local
+    ```
+  
+    
 
 
 
@@ -1558,6 +1567,92 @@ Volume支持多种类型，如：
   ```
 
   其它操作与ConfigMap类似
+  
++ **PVC transfer namespace**
+
+  ``` shell
+  $ kubectl get pvc cassandra-data-0 cassandra-data-1 cassandra-data-2 -n staging
+  NAME                         STATUS   VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS    AGE
+  cassandra-data-0   Bound    pvc-ca98b157-8ad0-434c-8dda-4bd526d7b042   4Ti        RWO            gp2-encrypted   7m34s
+  
+  Step 1. Patch the PVs to set the “persistentVolumeReclaimPolicy” to “Retain”
+  $ kubectl patch pv pvc-ca98b157-8ad0-434c-8dda-4bd526d7b042 -p '{"spec":{"persistentVolumeReclaimPolicy":"Retain"}}'
+  persistentvolume/pvc-ca98b157-8ad0-434c-8dda-4bd526d7b042 patched
+  
+  Step 2. Export the current PVCs objects because it will be necessary to recreate the PVCs in a later stage:
+  $ kubectl get pvc cassandra-data-0 -o yaml > cassandra-data-0.yaml
+  
+  Step 3. Delete the current PVC in the namespace “staging”
+  $ kubectl delete pvc cassandra-data-0 cassandra-data-1 cassandra-data-2 -n staging
+  persistentvolumeclaim "cassandra-data-0" deleted
+  
+  See that the PV Status will be changed from “Bound” to “Released”
+  $ kubectl get pv pvc-ca98b157-8ad0-434c-8dda-4bd526d7b042
+  NAME                                       CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS     CLAIM                                STORAGECLASS    REASON   AGE
+  pvc-ca98b157-8ad0-434c-8dda-4bd526d7b042   4Ti        RWO            Retain           Released   staging/cassandra-data-0   gp2-encrypted            62d
+  
+  
+  Step 4. Edit each one of the PVs to remove the old references
+  $ kubectl edit pv pvc-ca98b157-8ad0-434c-8dda-4bd526d7b042
+  And delete all the lines below:
+  ...
+  claimRef:
+   apiVersion: v1
+   kind: PersistentVolumeClaim
+   name: cassandra-data-0
+   namespace: staging
+   resourceVersion: "85681949"
+   uid: ca98b157-8ad0-434c-8dda-4bd526d7b042
+  ...
+  Now, see that there are no references anymore in the CLAIM column
+  $ kubectl get pv pvc-ca98b157-8ad0-434c-8dda-4bd526d7b042
+  NAME                                       CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS     CLAIM   STORAGECLASS    REASON   AGE
+  pvc-ca98b157-8ad0-434c-8dda-4bd526d7b042   4Ti        RWO            Retain           Released   /       gp2-encrypted            62d
+  
+  Step 5. Edit each one of those files which we exported the PVC object in step 2.
+  $ vi cassandra-data-0.yaml
+  And delete all the lines below with the arrow key “< — — “
+  ...
+  apiVersion: v1
+  kind: PersistentVolumeClaim
+  metadata:
+    annotations:  <------ To delete
+      pv.kubernetes.io/bind-completed: "yes"  <------ To delete
+      pv.kubernetes.io/bound-by-controller: "yes"  <------ To delete
+      volume.beta.kubernetes.io/storage-provisioner: kubernetes.io/aws-ebs  <------ To delete
+    creationTimestamp: "2020-08-19T23:52:17Z"  <------ To delete
+    finalizers:  <------ To delete
+    - kubernetes.io/pvc-protection  <------ To delete
+    labels:
+      app: cassandra
+    name: cassandra-data-0
+    namespace: staging  <------ To delete
+    resourceVersion: "85682006"  <------ To delete
+    selfLink: /api/v1/namespaces/staging/persistentvolumeclaims/cassandra-data-cassandra-0  <------ To delete
+    uid: ca98b157-8ad0-434c-8dda-4bd526d7b042  <------ To delete
+  spec:
+    accessModes:
+    - ReadWriteOnce
+    resources:
+      requests:
+        storage: 4Ti
+    storageClassName: gp2-encrypted
+    volumeMode: Filesystem
+    volumeName: pvc-ca98b157-8ad0-434c-8dda-4bd526d7b042
+  status:  <------ To delete
+    accessModes:  <------ To delete
+    - ReadWriteOnce  <------ To delete
+    capacity:  <------ To delete
+      storage: 4Ti  <------ To delete
+    phase: Bound  <------ To delete
+  ...
+  
+  Step 6. Now, I’m going to create those PVCs again, but inside the Namespace “integration”
+  kubectl apply -f cassandra-data-0.yaml
+  
+  In the following, check the PVCs state, which will probably in Pending state
+  After a few seconds, all the PVCs should be in a Bound state
+  ```
 
 
 
@@ -1737,6 +1832,17 @@ kubectl [command] [resourceType] [name] [flags -n -A -o]   # kubectl集群命令
    | autoscale | 自动调整 | 自动调整Pod的数量      |
    | apply     | 应用     | 通过文件对资源进行配置 |
    | label     | 标签     | 更新资源上的标签       |
+   
+   ```shell
+   # 可以使API server监听在主机端口  
+   # http://tnblog.net/hb/article/details/4681
+   kubectl proxy  
+   # 监听本地端口，把此端口的ip包统统forward到K8S集群的SVC/POD业务的端口 
+   # https://blog.csdn.net/xiphi_6/article/details/122962757
+   kubectl port-forward  
+   ```
+   
+   
 
 
 
@@ -1745,49 +1851,6 @@ kubectl [command] [resourceType] [name] [flags -n -A -o]   # kubectl集群命令
 ```shell
 kubectl api-resources   # kubernetes中所有的内容都抽象为资源
 ```
-
-1. 集群容器资源
-
-   | 资源名称   | 缩写 | 资源作用     |
-   | ---------- | ---- | ------------ |
-   | nodes      | no   | 集群组成部分 |
-   | namespaces | ns   | 隔离Pod      |
-   | pods       | po   | 装载容器     |
-
-2. Pod资源控制器
-
-   | 资源名称                   | 缩写   | 资源作用    |
-   | -------------------------- | ------ | ----------- |
-   | replication controllers    | rc     | 控制Pod资源 |
-   | replicasets                | rs     | 控制Pod资源 |
-   | deployments                | deploy | 控制Pod资源 |
-   | daemonsets                 | ds     | 控制Pod资源 |
-   | jobs                       |        | 控制Pod资源 |
-   | cronjobs                   | cj     | 控制Pod资源 |
-   | horizontal pod autoscalers | hpa    | 控制Pod资源 |
-   | statefulsets               | sts    | 控制Pod资源 |
-
-3. 服务发现资源
-
-   | 资源名称 | 缩写 | 资源作用        |
-   | -------- | ---- | --------------- |
-   | services | svc  | 统一Pod对外接口 |
-   | ingress  | ing  | 统一Pod对外接口 |
-
-4. 存储资源
-
-   | 资源名称                 | 缩写 | 资源作用 |
-   | ------------------------ | ---- | -------- |
-   | volume attachments       |      | 存储     |
-   | persistent volumes       | pv   | 存储     |
-   | persistent volume claims | pvc  | 存储     |
-
-5. 配置资源
-
-   | 资源名称   | 缩写 | 资源作用 |
-   | ---------- | ---- | -------- |
-   | configmaps | cm   | 配置     |
-   | secrets    |      | 配置     |
 
 
 
@@ -1807,6 +1870,20 @@ kubectl api-resources   # kubernetes中所有的内容都抽象为资源
 
 ### CRD
 
+```
+https://developer.aliyun.com/article/1110272
+
+1. 创建 CustomResourceDefinition
+2. 创建定制对象
+3. 删除 CustomResourceDefinition
+4. crd参数
+4.1 自定义资源-validations
+4.2 自定义资源-additionalPrinterColumns
+4.3 自定义资源-subresources
+```
+
+
+
 #### 运行模式
 
 <img src="pictures/image-20220111170316895.png" alt="image-20220111170316895" style="zoom: 80%;" />
@@ -1817,69 +1894,34 @@ CR 的变化 会通过 Informer 存入队列 WorkQueue，在 Controller 中消�
 
 #### operator-sdk
 
-+ **原理图**
+<img src="pictures/image-20220114145118617.png" alt="image-20220114145118617" style="zoom:80%;" />
 
-  <img src="pictures/image-20220114145118617.png" alt="image-20220114145118617" style="zoom:80%;" />
++ https://xie.infoq.cn/article/e3345fdc1c7390a779231e799
 
-  + https://xie.infoq.cn/article/e3345fdc1c7390a779231e799
++ **GVK = Group + Version + Kind**：apps/v1/deployments
 
-  + **GVK = Group + Version + Kind**：apps/v1/deployments
++ **GVR = Group + Version + Resource**：apps/v1/sample（例如某个 deployment 的 name 是 sample）
 
-  + **GVR = Group + Version + Resource**：apps/v1/sample（例如某个 deployment 的 name 是 sample）
++ **Scheme**：存储 GVK 和 Go Type 的映射关系
 
-  + **Scheme**：存储 GVK 和 Go Type 的映射关系
++ **Manager**：Controller Runtime 抽象的最外层管理对象，负责管理内部的 Controller，Cache，Client 等对象。
 
-  + **Manager**：Controller Runtime 抽象的最外层管理对象，负责管理内部的 Controller，Cache，Client 等对象。
++ **Cache**：负责管理 GVK 对应的 Share Informer
 
-  + **Cache**：负责管理 GVK 对应的 Share Informer
++ **Client**：Reconciler 对资源的创建/删除/更新操作都是通过该对象去操作
 
-  + **Client**：Reconciler 对资源的创建/删除/更新操作都是通过该对象去操作
++ **Controller**：创建有带限速功能的 Queue，以及该 Controller 关注 GVK 的 Watcher，一个 Controller 可以关注很多 GVK
 
-  + **Controller**：创建有带限速功能的 Queue，以及该 Controller 关注 GVK 的 Watcher，一个 Controller 可以关注很多 GVK
++ **Reconciler**：接收 Controller 发送给自己的 GVR 事件，然后从 Cache 中读取出 GVR 的当前状态，经过自己的控制逻辑，通过 Client 向 Kubernetes APIServer 更新 GVR 资源。**开发者只需要在 Reconciler 实现自己的控制逻辑** 。
 
-  + **Reconciler**：接收 Controller 发送给自己的 GVR 事件，然后从 Cache 中读取出 GVR 的当前状态，经过自己的控制逻辑，通过 Client 向 Kubernetes APIServer 更新 GVR 资源。**开发者只需要在 Reconciler 实现自己的控制逻辑** 。
-
-    
-
-+ **操作记录**
-
-  + 官方文档：https://sdk.operatorframework.io/docs/building-operators/golang/tutorial/
-  + 博客文档：https://www.qikqiak.com/post/k8s-operator-101/           https://zhuanlan.zhihu.com/p/389659932
-
-  ``` shell
-  # install go  https://zhuanlan.zhihu.com/p/389659932
   
-  mkdir crd-controller    # dir in goPath  https://www.cnblogs.com/zhaof/p/7906722.html
-  cd crd-controller/
-  
-  go mod init demo
-  
-  operator-sdk init --domain=demo
-  operator-sdk create api  --group learning --version v1 --kind AppService --controller=true --resource=true
-  
-  edit api/v1/appservice_types.go
-  
-  go mod tidy
-  make generate
-  make manifests
-  
-  edit controllers/appservice_controller.go
-  
-  make manifests
-  
-  make install run    # local
-  # make deploy       # as deployment  make undeploy  
-  
-  kubectl apply -f config/crd/bases/learning.demo_appservices.yaml
-  edit config/samples/learning_v1_appservice.yaml
-  kubectl apply -f config/samples/learning_v1_appservice.yaml
-  ```
 
 #### client-go
 
 https://github.com/kubernetes/sample-controller
 
 + https://andblog.cn/3196
++ https://www.cnblogs.com/huiyichanmian/p/16260274.html
 + https://blog.51cto.com/daixuan/5175780
 
 
@@ -1953,6 +1995,35 @@ https://mp.weixin.qq.com/s/jpopq16BOA_vrnLmejwEdQ
 
 
 
+<img src="E:\projects\qiuhonglong\04-云原生\pictures\image-20230213161758296.png" alt="image-20230213161758296" style="zoom:80%;" />
+
+```
+阶段1：Controller部分实现云盘扩容
+这个阶段由csi-resizer实现完成，在controller中通过云盘api调用实现扩容。
+
+下面逻辑决定是否扩容：
+resizer watch pvc，判断pvc是否需要resize：
+比较pvc现在和之前的值，当pvc值变大时；
+比较pvc和volume的值，当pvc值大于pv值时；
+
+扩容是通过resizeVolume函数实现的，过程：
+对需要扩容的pvc，配置pvc状态为resizing；
+调用csi-plugin中 ControllerExpandVolume函数，调用云盘api实现云盘扩容；
+更新pv对象的size，size变成扩容后大小；
+如果需要文件系统扩容，更新pvc状态为：FileSystemResizePending，等待node部分进行文件系统扩容；
+```
+
+```
+阶段2：Node部分实现文件系统扩容
+kubelet 一直watch pvc，执行逻辑如下：
+云盘attach后，执行MountDevice；编辑pv为已挂载：MarkDeviceAsMounted；
+然后调用resizeFileSystem函数（通过RequiresFSResize()方法判断是否进行文件系统扩容）
+调用CSI的NodeExpand接口，进而调用CSI Plugin的NodeExpandVolume，实现文件系统扩容；
+更新pvc的size大小，并更新pvc的FileSystemResizePending 状态；
+```
+
+
+
 
 
 
@@ -1975,7 +2046,6 @@ K8s 为支持 CSI 标准，包含如下 API 对象：
    在 Node Driver Registrar 组件向 Kubelet 注册完毕后，Kubelet 会创建该资源，故不需要显式创建 CSINode 资源。
 
    ``` yaml
-   
    apiVersion: storage.k8s.io/v1beta1
    kind: CSINode
    metadata:
@@ -2029,10 +2099,6 @@ K8s 为支持 CSI 标准，包含如下 API 对象：
     attached: true
   ```
 
-#### 支持特性
-
-
-
 
 
 
@@ -2052,7 +2118,13 @@ K8s 为支持 CSI 标准，包含如下 API 对象：
 
 
 
+### Extension API Server
 
+https://blog.csdn.net/weixin_38299404/article/details/121038582
+
+https://kubernetes.io/zh-cn/docs/tasks/extend-kubernetes/setup-extension-api-server/
+
+http://www.asznl.com/post/42
 
 
 
@@ -2243,6 +2315,12 @@ https://cloud.tencent.com/developer/article/1644857
 ### 源码
 
 https://jiulongzaitian.gitbooks.io/kubernetes/content/yuan-ma-fen-xi/scheduler/kubeletzhu-yao-gong-neng.html
+
+
+
+### MiniKube
+
+https://www.jianshu.com/p/ef400bfea973
 
 
 

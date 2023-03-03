@@ -42,6 +42,8 @@ $ yum-config-manager \
     --add-repo \
     https://mirrors.aliyun.com/docker-ce/linux/centos/docker-ce.repo
 
+# or curl https://download.docker.com/linux/centos/docker-ce.repo -o /etc/yum.repos.d/docker-ce.repo
+
 # 安装 docker 社区版
 $ yum install docker-ce docker-ce-cli containerd.io
 
