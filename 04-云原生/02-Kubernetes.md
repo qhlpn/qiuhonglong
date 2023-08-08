@@ -1652,6 +1652,10 @@ Volume支持多种类型，如：
   
   In the following, check the PVCs state, which will probably in Pending state
   After a few seconds, all the PVCs should be in a Bound state
+  
+  Step 7. Patch the PVs to set the “persistentVolumeReclaimPolicy” to “Delete”
+  $ kubectl patch pv pvc-ca98b157-8ad0-434c-8dda-4bd526d7b042 -p '{"spec":{"persistentVolumeReclaimPolicy":"Retain"}}'
+  persistentvolume/pvc-ca98b157-8ad0-434c-8dda-4bd526d7b042 patched
   ```
 
 
@@ -1892,11 +1896,39 @@ CR 的变化 会通过 Informer 存入队列 WorkQueue，在 Controller 中消�
 
 
 
-#### operator-sdk
+#### client-go
+
+https://github.com/kubernetes/sample-controller
+
++ https://andblog.cn/3196
++ https://www.cnblogs.com/huiyichanmian/p/16260274.html
++ https://blog.51cto.com/daixuan/5175780
+
+
+
+https://zhuanlan.zhihu.com/p/202611841
+
+https://www.fdevops.com/2022/06/26/31114
+
++ Informer
+
+  <img src="E:\projects\qiuhonglong\04-云原生\pictures\image-20221203203005929.png" alt="image-20221203203005929" style="zoom: 80%;" />
+
+  从图上就能看出，`Informer`由多个组件构成的。下面先了解一下组件。
+
+  - `Reflector`：使用`list-watch`来保证本地缓存数据的准确性、顺序性和一致性。list对应资源的全量列表数据，watch负责变化部分的数据，watch指定的k8s资源，当watch的资源发生变化时，触发变更的事件，并将资源对象的变化存放到本地队列`DeltaFIFO`中。
+  - `DeltaFIFO`：是一个增量队列，记录了资源变化的过程，`Reflector`就相当于队列的生产者。这个组件可以拆分成两个部分来理解，FIFO就是一个队列，拥有基本的队列方法，比如ADD，UPDATE等。Delta是一个资源对象存储，保存存储对象的消费类型。
+  - `Indexer`：用来存储资源对象并自带索引功能的本地存储，`Reflector`从`DeltaFIFO`中将消费处来的资源对象存储到`Indexer`，`Indexer`与ETCD中的数据完全保持一致。从而client-go可以本地读取，减少k8sAPIServer的数据交互压力。
+
+
+
+
+
+#### controller-runtime
+
+https://www.cnblogs.com/huiyichanmian/p/16278007.html
 
 <img src="pictures/image-20220114145118617.png" alt="image-20220114145118617" style="zoom:80%;" />
-
-+ https://xie.infoq.cn/article/e3345fdc1c7390a779231e799
 
 + **GVK = Group + Version + Kind**：apps/v1/deployments
 
@@ -1916,31 +1948,11 @@ CR 的变化 会通过 Informer 存入队列 WorkQueue，在 Controller 中消�
 
   
 
-#### client-go
+#### kubebuiler
 
-https://github.com/kubernetes/sample-controller
-
-+ https://andblog.cn/3196
-+ https://www.cnblogs.com/huiyichanmian/p/16260274.html
-+ https://blog.51cto.com/daixuan/5175780
+https://www.cnblogs.com/huiyichanmian/p/16288912.html
 
 
-
-https://zhuanlan.zhihu.com/p/202611841
-
-https://www.fdevops.com/2022/06/26/31114
-
-+ Informer
-
-  <img src="E:\projects\qiuhonglong\04-云原生\pictures\image-20221210211952949.png" alt="image-20221210211952949" style="zoom: 80%;" />
-
-  <img src="E:\projects\qiuhonglong\04-云原生\pictures\image-20221203203005929.png" alt="image-20221203203005929" style="zoom: 80%;" />
-
-  从图上就能看出，`Informer`由多个组件构成的。下面先了解一下组件。
-
-  - `Reflector`：使用`list-watch`来保证本地缓存数据的准确性、顺序性和一致性。list对应资源的全量列表数据，watch负责变化部分的数据，watch指定的k8s资源，当watch的资源发生变化时，触发变更的事件，并将资源对象的变化存放到本地队列`DeltaFIFO`中。
-  - `DeltaFIFO`：是一个增量队列，记录了资源变化的过程，`Reflector`就相当于队列的生产者。这个组件可以拆分成两个部分来理解，FIFO就是一个队列，拥有基本的队列方法，比如ADD，UPDATE等。Delta是一个资源对象存储，保存存储对象的消费类型。
-  - `Indexer`：用来存储资源对象并自带索引功能的本地存储，`Reflector`从`DeltaFIFO`中将消费处来的资源对象存储到`Indexer`，`Indexer`与ETCD中的数据完全保持一致。从而client-go可以本地读取，减少k8sAPIServer的数据交互压力。
 
 
 

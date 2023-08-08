@@ -379,6 +379,7 @@ ansible-playbook site.yml
      ceph config set mgr mgr/dashboard/ssl_server_port 8443 
      ceph dashboard ac-user-create <username> -i <file-containing-password> administrator
      ceph dashboard ac-user-create <username> <password> administrator
+     ceph dashboard ac-user-delete <username>
      ```
 
   + 启动 mgr.prometheus 模块
@@ -424,7 +425,44 @@ ansible-playbook site.yml
        ceph osd out osd.0
        ceph osd down osd.0
        ceph osd purge osd.0 --yes-i-really-mean-it
+       
+       
+       for sc in ; do 
+       
+       
+       ;done
        ```
+    
++ **rgw**
+
+    ``` shell
+    mkdir – p /var/lib/ceph/radosgw/ceph-rgw.`hostname`
+    
+    ceph auth get-or-create client.rgw.`hostname` osd "allow rwx" mon "allow rw"
+    ceph auth get client.rgw.`hostname` | tee /var/lib/ceph/radosgw/ceph-rgw.{hostname}/keyring
+    
+    chown -R ceph:ceph /var/lib/ceph/radosgw/ceph-rgw.`hostname`
+    
+    ceph osd crush rule dump  # get rule
+    
+    for i in {.rgw.root,default.rgw.control,default.rgw.meta,default.rgw.log,default.rgw.buckets.index,default.rgw.buckets.non-ec};do ceph osd pool create $i 8 8 replicated $rule;done
+    ceph osd pool create default.rgw.buckets.data 64 64 replicated $rule
+    
+    for i in {.rgw.root,default.rgw.control,default.rgw.meta,default.rgw.log,default.rgw.buckets.index,default.rgw.buckets.non-ec,default.rgw.buckets.data};do ceph osd pool application enable $i rgw;done
+    
+    [client.rgw.K01-P01GZ-DN-001.gd.cn]
+    host = K01-P01GZ-DN-001.gd.cn
+    keyring = /var/lib/ceph/radosgw/ceph-rgw.K01-P01GZ-DN-001.gd.cn/keyring
+    log_file = /var/log/radosgw/client.radosgw.gateway.log
+    rgw_s3_auth_use_keystone = False
+    rgw_frontends = civetweb port=8080
+    rgw_enable_usage_log = true
+    
+    systemctl enable ceph-radosgw@rgw.`hostname`
+    systemctl start ceph-radosgw@rgw.`hostname`
+    ```
+
+    
 
 
 
@@ -445,7 +483,7 @@ ceph {mon/osd/pg/...} dump # 详情
 ceph --show-config
 # 修改 ceph  配置 （1.2 临时生效，3 永久生效）
 # 1. ceph config
-ceph config set mon auth_allow_insecure_global_id_reclaim false
+ceph config set mon mon_allow_pool_delete true
 ceph config get mon.node-1 auth_allow_insecure_global_id_reclaim # get 需要指明具体的节点，set 则不用
 # 2. 套接字 / 进程
 ceph --admin-daemon /var/run/ceph/ceph-mon.mode-1.asok config [show|set...]
@@ -540,6 +578,24 @@ osd_scrub_load_threshold = 40.0
 osd_client_watch_timeout = 15
 osd_heartbeat_grace = 20
 osd_heartbeat_interval = 5
+
+
+
+#osd_op_num_shards=80   # 8
+#osd_op_num_threads_per_shard=20 # 2
+#osd_journal_size=51200   # 5120
+#journal_max_write_bytes=104857600  # 10485760
+#journal_max_write_entries=1000     # 100
+#
+#
+#osd_max_write_size=900  # 90
+#osd_client_message_size_cap=5242880000   # 524288000
+#osd_map_cache_size=500  #50
+#osd_recovery_op_priority=1  # 3
+#osd_recovery_max_active=1   # 3
+#osd_max_backfills=1         # 1
+#osd_memory_target=2147483648 # 1073741824 4294967296
+#bluestore_min_alloc_size=4096
 ```
 
 
@@ -650,6 +706,11 @@ osd_heartbeat_interval = 5
 
   ``` shell
   ceph osd [ blocklist | blocked-by | create | new | deep-scrub | df | down | dump | erasure-code-profile | find | getcrushmap | getmap | getmaxosd | in | ls | lspools | map | metadata | ok-to-stop | out | pause | perf | pg-temp | force-create-pg | primary-affinity | primary-temp | repair | reweight | reweight-by-pg | rm | destroy | purge | safe-to-destroy | scrub | set | setcrushmap | setmaxosd | stat | tree | unpause | unset ]
+  
+  ceph osd set noscrub
+  ceph osd set nodeep-scrub
+  ceph osd unset noscrub
+  ceph osd unset nodeep-scrub
   ```
 + 操作示例
 
@@ -657,8 +718,12 @@ osd_heartbeat_interval = 5
   # 新增 osd 
   # bluestore: db + meta + wal
   # create 版
-  ceph-volume lvm create --bluestore --data {dev or vg/lv} --block.wal {} --block.db {}
+  ceph-volume lvm create --bluestore --data {/dev/sdx or vg/lv} --block.wal {} --block.db {}
   # if block device, a logical volume will be created
+  
+  # wal 是 RocksDB 的 write-ahead log, 相当于之前的 journal 数据，db 是 RocksDB 的 metadata 信息。
+  # 在磁盘性能选择原则是 block.wal > block.db > block.data。当然所有的数据也可以放到同一块盘上。
+  # 默认情况下，wal 和 db 的大小分别是 512 MB 和 1GB， 官方建议调整block.db 是主设备 4% ，而block.wal分为 6% 左右，2个加起来 10% 左右。
   
   # 等同于 prepare + activate
   ceph-volume lvm prepare --bluestore --data {dev or vg/lv} --block.wal {} --block.db {} 
@@ -679,7 +744,7 @@ osd_heartbeat_interval = 5
   ceph osd scrub {who}
   ceph pg scrub {pg.id}  # ceph pg dump -> pg.id
   ```
-
+  
   
 
 #### 2.4 mgr
@@ -697,12 +762,13 @@ osd_heartbeat_interval = 5
 
   ```shell
   ceph osd pool create poolName 64 64  <replicated + rule>
+  # ceph osd pool create demo 1024 1024 replicated replicated-rule-59b58da0ccec
   
   PGs = ((total_number_of_OSD * 100) / max_replication_count) / pool_count
   结算的结果往上取靠近2的N次方的值。比如总共OSD数量是160，复制份数3，pool数量也是3，那么每个pool分配的PG数量就是2048
   
   ceph.conf: osd_pool_default_size = 3
-  ceph osd pool set poolName size 1   
+  ceph osd pool set poolName size 1   
   
   ceph osd pool application enable poolName [rbd | rgw | cephfs] -- 启用应用类型
   ceph osd pool application get poolName
@@ -725,6 +791,10 @@ osd_heartbeat_interval = 5
   rbd status {pool-name}/{image-name}  -> watcher
   ceph osd blacklist add watcher
   ceph osd blacklist rm watcher
+  rbd du {pool-name}/{image-name}
+  rbd feature enable {pool-name}/{image-name} layering
+  rbd feature disable {pool-name}/{image-name} layering
+  
   
   # 扩容有三个层面：磁盘扩容、分区扩容、文件系统扩容
   rbd resize {pool-name}/{image-name} --size 20G  # 磁盘扩容 fdisk -l
@@ -751,6 +821,7 @@ osd_heartbeat_interval = 5
   pvcreate /dev/sdb # 将物理磁盘初始化为物理卷 PV
   vgcreate ceph /dev/sdb # 创建卷组 VG，并将 PV 加入 VG
   lvcreate -n osd -L 10G ceph # 基于卷组 VG 创建逻辑卷 LV
+  lvcreate -n osd -l 100%vg ceph
   mkfs.xfs /dev/ceph/osd # 格式化
   mount /dev/ceph/osd /mnt # 挂载
   ```
@@ -823,15 +894,17 @@ osd_heartbeat_interval = 5
     + 全量导出
     
       ```shell
-      rbd snap export {pool-name}/{image-name}@{snap-name} {path}
-      rbd snap import {snap-file} {pool-name}/{image-name}
+      rbd export {pool-name}/{image-name} {file}
+      rbd import {file} {pool-name}/{image-name}  # 同时创建目标
+      rbd export {pool-name}/{image-name} - | rbd import - {pool-name}/{image-name}  # PIPE写法
       ```
-  
+    
     + 增量导出
     
       ```shell
-      rbd snap export-diff {pool-name}/{image-name}@{snap-name} {path}
-      rbd snap import-diff {snap-file} {pool-name}/{image-name}
+      rbd export-diff {pool-name}/{image-name}@{snap-name} {snap-file}
+      rbd import-diff {snap-file} {pool-name}/{image-name}   # 导入已有镜像    
+      rbd export-diff {pool-name}/{image-name}@{snap-name} - | rbd import-diff - {pool-name}/{image-name}  # PIPE写法
       ```
   
 + 任务队列
@@ -918,7 +991,9 @@ ceph osd setcrushmap -i newcrushmap
 
 
 
-#### 2.10 fio 压测
+#### 2.10 bench
+
+**fio**
 
 > https://www.jianshu.com/p/ee6ee9ca37e5
 >
@@ -926,33 +1001,154 @@ ceph osd setcrushmap -i newcrushmap
 >
 > https://www.cnblogs.com/raykuan/p/6914748.html
 
-+ 顺序写（测吞吐量）
-
-  ``` shell
-  fio -direct=1 -iodepth=32 -rw=write -ioengine=libaio -bs=1024k -numjobs=1 -time_based=1 -runtime=300 -group_reporting -filename=iotest -name=test -size=10G
-  ```
-
-+ 顺序读（测吞吐量）
-
-  ``` shell
-  fio -direct=1 -iodepth=32 -rw=read -ioengine=libaio -bs=1024k -numjobs=1 -time_based=1 -runtime=300 -group_reporting -filename=iotest -name=test -size=10G
-  ```
-
-+ 随机写（测IOPS）
-
-  ``` shell
-  fio -direct=1 -iodepth=32 -rw=randwrite -ioengine=libaio -bs=4k -numjobs=4 -time_based=1 -runtime=300 -group_reporting -filename=iotest -name=test -size=10G
-  ```
-
-+ 随机读（测IOPS）
-
-  ``` shell
-  fio -direct=1 -iodepth=32 -rw=randread -ioengine=libaio -bs=4k -numjobs=4 -time_based=1 -runtime=300 -group_reporting -filename=iotest -name=test -size=10G
-  ```
+``` shell
+#!/bin/bash
+time_now=`date "+%Y%m%d%H%M%S"`
+#time_now="bak"
+mkdir  ${time_now}; cd ${time_now};
+test_rst="test_rst.rst"
+t=$1
+if [[ ''$t == '' ]]; then
+    t=120
+fi
+ 
+declare -A "randread_4k"
+randread_4k["log"]="randread_4k.log"
+randread_4k["cmd"]="fio -direct=1 -iodepth=128 -rw=randread -ioengine=libaio -bs=4k -time_based=1 -numjobs=1 -runtime=$t -group_reporting -filename=iotest -name=test -size=10G"
+`${randread_4k["cmd"]} > ${randread_4k["log"]}`
+randread_4k["rst"]=`cat ${randread_4k["log"]}  | grep "IOPS" | cut -d, -f 1 | cut -d= -f 2`
+randread_4k["util"]=`cat ${randread_4k["log"]}  | grep "util=" | awk -F= '{print $NF}'`
+printf "%-10s %-10s %-16s %-16s\n" " "            " "          "平均值" "磁盘利用率" >> ${test_rst}
+printf "%-12s %-13s %-12s %-12s\n" "IOPS"         "4K随机读"   "${randread_4k["rst"]}  ${randread_4k["util"]}" >> ${test_rst}
+rm -f iotest
+echo "============================IOPS  4K随机读================================"
+echo ${randread_4k["cmd"]}
+cat ${randread_4k["log"]}
+echo "=========================================================================="
+ 
+declare -A "randwrite_4k"
+randwrite_4k["log"]="randwrite_4k.log"
+randwrite_4k["cmd"]="fio -direct=1 -iodepth=128 -rw=randwrite -ioengine=libaio -bs=4k -time_based=1 -numjobs=1 -runtime=$t -group_reporting -filename=iotest -name=test -size=10G"
+`${randwrite_4k["cmd"]} > ${randwrite_4k["log"]}`
+randwrite_4k["rst"]=`cat ${randwrite_4k["log"]}  | grep "IOPS" | cut -d, -f 1 | cut -d= -f 2`
+randwrite_4k["util"]=`cat ${randwrite_4k["log"]}  | grep "util=" | awk -F= '{print $NF}'`
+printf "%-12s %-13s %-12s %-12s\n" "IOPS"  "4K随机写"  "${randwrite_4k["rst"]}  ${randwrite_4k["util"]}" >> ${test_rst}
+rm -f iotest
+echo "============================IOPS  4K随机写================================"
+echo ${randwrite_4k["cmd"]}
+cat ${randwrite_4k["log"]}
+echo "=========================================================================="
+  
+ 
+ 
+declare -A "read_1024k"
+read_1024k["log"]="read_1024k.log"
+read_1024k["cmd"]="fio -direct=1 -iodepth=64 -rw=read -ioengine=libaio -bs=1024K -time_based=1 -numjobs=1  -runtime=$t -group_reporting -filename=iotest -name=test -size=10G"
+`${read_1024k["cmd"]} > ${read_1024k["log"]}`
+read_1024k["rst"]=`cat ${read_1024k["log"]}  | grep IOPS | cut -d= -f 3 | cut -d" " -f 1`
+read_1024k["util"]=`cat ${read_1024k["log"]}  | grep "util=" | awk -F= '{print $NF}'`
+printf "%-15s %-13s %-12s %-12s\n" "吞吐量"       "1024K顺序读" "${read_1024k["rst"]}  ${read_1024k["util"]}" >> ${test_rst}
+rm -f iotest
+echo "============================吞吐量   1024K顺序读=========================="
+echo ${read_1024k["cmd"]}
+cat ${read_1024k["log"]}
+echo "=========================================================================="
+   
+   
+declare -A "write_1024k"
+write_1024k["log"]="write_1024k.log"
+write_1024k["cmd"]="fio -direct=1 -iodepth=64 -rw=write -ioengine=libaio -bs=1024k -time_based=1 -numjobs=1  -runtime=$t -group_reporting -filename=iotest -name=test -size=10G"
+`${write_1024k["cmd"]} > ${write_1024k["log"]}`
+write_1024k["rst"]=`cat ${write_1024k["log"]}  | grep IOPS | cut -d= -f 3 | cut -d" " -f 1`
+write_1024k["util"]=`cat ${write_1024k["log"]}  | grep "util=" | awk -F= '{print $NF}'`
+printf "%-15s %-13s %-12s %-12s\n" "吞吐量"       "1024k顺序写"  "${write_1024k["rst"]}  ${write_1024k["util"]}" >> ${test_rst}
+rm -f iotest
+echo "============================吞吐量   1024k顺序写=========================="
+echo ${write_1024k["cmd"]}
+cat ${write_1024k["log"]}
+echo "=========================================================================="
+   
+   
+declare -A "read_4k"
+read_4k["log"]="read_4k.log"
+read_4k["cmd"]="fio -direct=1 -iodepth=1 -rw=read -ioengine=libaio -bs=4k -time_based=1 -numjobs=1 -runtime=$t -group_reporting -filename=iotest -name=test -size=10G"
+`${read_4k["cmd"]} > ${read_4k["log"]}`
+read_4k["rst"]=`cat ${read_4k["log"]}| grep -E "lat.*avg.*" | egrep -v "slat|clat" | sed 's/.*avg=//'| cut -d, -f1``cat ${read_4k["log"]}| grep -E "lat.*avg.*" | egrep -v "slat|clat" |sed 's/.*(//'| sed 's/).*//'`
+read_4k["util"]=`cat ${read_4k["log"]}  | grep "util=" | awk -F= '{print $NF}'`
+printf "%-15s %-13s %-12s %-12s\n" "平均响应时间" "4K顺序读"  "${read_4k["rst"]}  ${read_4k["util"]}" >> ${test_rst}
+rm -f iotest
+echo "============================平均响应时间    4k顺序读========================"
+echo ${read_4k["cmd"]}
+cat ${read_4k["log"]}
+echo "=========================================================================="
+   
+   
+declare -A "write_4k"
+write_4k["log"]="write_4k.log"
+write_4k["cmd"]="fio -direct=1 -iodepth=1 -rw=write -ioengine=libaio -bs=4k -time_based=1 -numjobs=1 -runtime=$t -group_reporting -filename=iotest -name=test -size=10G"
+`${write_4k["cmd"]} > ${write_4k["log"]}`
+write_4k["rst"]=`cat ${write_4k["log"]}| grep -E "lat.*avg.*" | egrep -v "slat|clat" | sed 's/.*avg=//'| cut -d, -f1``cat ${write_4k["log"]}| grep -E "lat.*avg.*" | egrep -v "slat|clat" |sed 's/.*(//'| sed 's/).*//'`
+write_4k["util"]=`cat ${write_4k["log"]}  | grep "util=" | awk -F= '{print $NF}'`
+printf "%-15s %-13s %-12s %-12s\n" "平均响应时间" "4K顺序写"   "${write_4k["rst"]}  ${write_4k["util"]}" >> ${test_rst}
+rm -f iotest
+echo "============================平均响应时间    4k顺序写========================"
+echo ${write_4k["cmd"]}
+cat ${write_4k["log"]}
+echo "=========================================================================="
+   
+cat ${test_rst}
+```
 
 > 1. 测试随机读写时，numjobs从8开始，12..16..20..逐渐往上加，直到IOPS不再上升
 > 2. 测试顺序读写时，numjobs从1开始，2..3..4..往上加，基本思路与以上描述一致
 > 3. 测试随机读写时要关注IOPS，不要关注IO吞吐；测试顺序读写时要关注IO吞吐，不要关注IOPS
+
+**rbd bench**
+
+``` shell
+# https://blog.csdn.net/Micha_Lu/article/details/126490260
+
+rbd bench <rbd-name> --io-type  <io-type>  --io-size <io-size> --io-pattern <io-pattern>  --io-threads <io-threads> --io-total <total-size> 
+
+rbd-name：指定测试块设备名称，如rbd/rbd01
+–io-type：指定测试IO类型，可选参数write、read
+–io-size：指定测试IO块大小，单位为byte，默认参数为4096（4KB）
+–io-pattern：指定测试IO模式，可选参数为seq（顺序）、rand（随机）
+–io-threads：指定测试IO线程数，默认参数为16
+–io-total：指定测试总写入数据量，单位为byte，默认参数为1073741824（1G）
+```
+
+``` shell
+rbd bench rbd_ssd/fio_bench.img --io-type write --io-size 1M --io-pattern seq  --io-threads 32 --io-total 10G
+rbd bench rbd_ssd/fio_bench.img --io-type read --io-size 1M --io-pattern seq  --io-threads 32 --io-total 10G
+rbd bench rbd_ssd/fio_bench.img --io-type write --io-size 4K --io-pattern rand  --io-threads 32 --io-total 1G
+rbd bench rbd_ssd/fio_bench.img --io-type read --io-size 4K --io-pattern rand  --io-threads 32 --io-total 1G
+```
+
+**sysbench**
+
+``` shell
+--file-num=N          代表生成测试文件的数量，默认为128。
+--file-block-size=N      测试时所使用文件块的大小，如果想磁盘针对innodb存储引擎进行测试，可以将其设置为16384，即innodb存储引擎页的大小。默认为16384。
+--file-total-size=SIZE     创建测试文件的总大小，默认为2G大小。
+--file-test-mode=STRING 文件测试模式，包含：seqwr(顺序写), seqrewr(顺序读写), seqrd(顺序读), rndrd(随机读), rndwr(随机写), rndrw(随机读写)。
+--file-io-mode=STRING   文件操作的模式，sync（同步）,async（异步）,fastmmap（快速mmap）,slowmmap（慢速mmap），默认为sync同步模式。
+--file-async-backlog=N   对应每个线程队列的异步操作数，默认为128。
+--file-extra-flags=STRING 打开文件时的选项，这是与API相关的参数。
+--file-fsync-freq=N      执行fsync()函数的频率。fsync主要是同步磁盘文件，因为可能有系统和磁盘缓冲的关系。 0代表不使用fsync函数。默认值为100。
+--file-fsync-all=[on|off]  每执行完一次写操作，就执行一次fsync。默认为off。
+--file-fsync-end=[on|off] 在测试结束时执行fsync函数。默认为on。
+--file-fsync-mode=STRING文件同步函数的选择，同样是和API相关的参数，由于多个操作系统对于fdatasync支持不同，因此不建议使用fdatasync。默认为fsync。
+--file-merged-requests=N 大多情况下，合并可能的IO的请求数，默认为0。
+--file-rw-ratio=N         测试时的读写比例，默认时为1.5，即可3：2
+
+sysbench --test=fileio --threads=16 --file-block-size=16k --file-total-size=100G --file-test-mode=seqrd --report-interval=1 prepare
+sysbench --test=fileio --num-threads=16 --file-block-size=16k --file-total-size=100G --file-test-mode=rndwr --report-interval=1 --file-extra-flags=direct run
+```
+
+
+
+
 
 
 
@@ -971,6 +1167,8 @@ cgroup  http://www.manongjc.com/article/90348.html
 
 
 #### 2.12 nbd
+
+https://developer.aliyun.com/article/794630
 
 <img src="E:\projects\qiuhonglong\02-数据存储\pictures\image-20221205214439245.png" alt="image-20221205214439245" style="zoom: 67%;" />
 
@@ -1135,8 +1333,6 @@ rbd snap create <RBD image for temporary snap image>@<random snap name>
 ceph rbd task add flatten <RBD image for temporary snap image>
 ```
 
-**Deep-flatten** makes `rbd flatten` work on all the snapshots of an image, in addition to the image itself. Without it, snapshots of an image will still rely on the parent, so the parent will not be delete-able until the snapshots are deleted. Deep-flatten makes a parent independent of its clones, even if they have snapshots.
-
 + rbd snap clone
 
 ```
@@ -1196,16 +1392,61 @@ ceph rbd task trash remove <RBD image for temporary snap image ID>
 
 
 
+**1: Layering support.**分层允许您使用克隆。
+
+**2: Striping v2 support.**条带化可在多个对象之间分散数据。条带有助于并行处理连续读/写工作负载。
+
+**4: Exclusive locking support.**启用后，它要求客户端在进行写入前获得对象锁定。
+
+**8: Object map support.**块设备是精简配置的 - 这代表仅存储实际存在的数据。对象映射支持有助于跟踪实际存在的对象（将数据存储在驱动器上）。启用对象映射支持可加快克隆或导入和导出稀疏填充镜像的 I/O 操作。
+
+**16: Fast-diff support.**Fast-diff 支持取决于对象映射支持和专用锁定支持。它向对象映射中添加了另一个属性，这可以更快地生成镜像快照和快照的实际数据使用量之间的差别。
+
+**32: Deep-flatten support.**深度扁平使 `rbd flatten` 除了镜像本身外还作用于镜像的所有快照。如果没有它，镜像的快照仍会依赖于父级，因此在快照被删除之前，父级将无法删除。深度扁平化使得父级独立于克隆，即使它们有快照。
+
+**64: Journaling support.**日志记录会按照镜像发生的顺序记录对镜像的所有修改。这样可确保远程镜像的 crash-consistent 镜像在本地可用
+
+
+
 ```shell
+# rbd-default-clone-format=2，可以去掉protect软保护
+# 父级snapshot不需要protect就可以clone子级
+# 进一步，没有protect就不需要unprotect操作，因此clone子级后可以删除父级snapshot
 # rbd clone
 validate_parent: parent snapshot must be protected
-
-# rbd rm
-rbd: image has snapshots - these must be deleted with 'rbd snap purge' before the image can be removed.
-
 # rbd snap rm
 librbd::Operations: snapshot is protected
 
+
+# deep-flatten 
+# 深度扁平，使 rbd flatten 除了镜像本身外还作用于镜像的所有快照
+# 如果没有它，镜像的快照仍会依赖于父级，因此在快照被删除之前，父级将无法删除。深度扁平化使得父级独立于克隆，即使它们有快照。
+# ==========================
+rbd create -f layering parent
+rbd snap create parent@snap
+rbd clone --rbd-default-clone-format=2 -f layering parent@snap child # 不带deep-flatten 
+rbd snap create child@snap
+rbd flatten child
+rbd snap rm parent@snap
+rbd rm parent  # error: image has snapshots with linked clones - these must be deleted or flattened before the image can be removed.
+rbd info parent # snapshot_count: 1
+rbd snap rm child@snap
+rbd info parent # snapshot_count: 0
+rbd rm parent  # ok
+# ==========================
+rbd create -f layering parent
+rbd snap create parent@snap
+rbd clone --rbd-default-clone-format=2 -f layering,deep-flatten parent@snap child  # 带deep-flatten
+rbd snap create child@snap
+rbd flatten child
+rbd snap rm parent@snap
+rbd rm parent # success
+
+
+
+# 通用硬限制
+# rbd rm
+rbd: image has snapshots - these must be deleted with 'rbd snap purge' before the image can be removed.
 # rbd snap unprotect
 cannot unprotect: at least 2 children
 ```
@@ -1216,12 +1457,13 @@ cannot unprotect: at least 2 children
 
 **RBDCache**
 
-| 配置                        | 取值      | 说明                                                         |
-| --------------------------- | --------- | ------------------------------------------------------------ |
-| osd_tier_default_cache_mode | writeback | 当CPU采用高速缓存时，它的写内存操作有两种模式：<br />一种称为“穿透”(Write-Through)模式，在这种模式中高速缓存对于写操作就好像不存在一样，每次写时都直接写到内存中，所以实际上只是对读操作使用高速缓存，因而效率相对较低。<br />另一种称为“回写”(Write-Back)模式，写的时候先写入高速缓存，然后由高速缓存的硬件在周转使用缓冲线时自动写入内存，或者由软件主动地“冲刷”有关的缓冲线。 |
-| rbd_cache                   | true      | whether to enable caching (writeback unless rbd_cache_max_dirty is 0) |
-| rbd_cache_size              | 32M       | Librbd 能使用的最大缓存大小                                  |
-| rbd_cache_max_dirty         | 24M       | 缓存中允许脏数据的最大值，用来控制回写大小，不能超过 rbd_cache_size。超过的话，应用的写入应该会被阻塞， |
+| 配置                               | 取值      | 说明                                                         |
+| ---------------------------------- | --------- | ------------------------------------------------------------ |
+| osd_tier_default_cache_mode        | writeback | 当CPU采用高速缓存时，它的写内存操作有两种模式：<br />一种称为“穿透”(Write-Through)模式，在这种模式中高速缓存对于写操作就好像不存在一样，每次写时都直接写到内存中，所以实际上只是对读操作使用高速缓存，因而效率相对较低。<br />另一种称为“回写”(Write-Back)模式，写的时候先写入高速缓存，然后由高速缓存的硬件在周转使用缓冲线时自动写入内存，或者由软件主动地“冲刷”有关的缓冲线。 |
+| rbd_cache                          | true      | whether to enable caching (writeback unless rbd_cache_max_dirty is 0) |
+| rbd_cache_size                     | 32M       | Librbd 能使用的最大缓存大小                                  |
+| rbd_cache_max_dirty                | 24M       | 缓存中允许脏数据的最大值，用来控制回写大小，不能超过 rbd_cache_size。超过的话，应用的写入应该会被阻塞， |
+| rbd_cache_writethrough_until_flush | true      | RBDCache 在收到第一个 flush 指令之前，使用 writethrough 模式，透传数据，避免数据丢失；在收到第一个 flush 指令后，开始 writeback 模式。 |
 
 
 

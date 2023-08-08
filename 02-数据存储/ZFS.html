@@ -1,0 +1,532 @@
+<html lang="zh-CN"><head><meta charset="UTF-8"><style>.nodata  main {width:1000px;margin: auto;}</style></head><body class="nodata " style=""><div class="main_father clearfix d-flex justify-content-center " style="height:100%;"> <div class="container clearfix " id="mainBox"><main><div class="blog-content-box">
+<div class="article-header-box">
+<div class="article-header">
+<div class="article-title-box">
+<h1 class="title-article" id="articleContentId">Linux学习之文件系统zfs文件系统</h1>
+</div>
+
+</div>
+</div>
+<div id="blogHuaweiyunAdvert"></div>
+<article class="baidu_pl">
+<div class="article_content clearfix" id="article_content">
+<link href="https://csdnimg.cn/release/blogv2/dist/mdeditor/css/editerView/kdoc_html_views-1a98987dfd.css" rel="stylesheet"/>
+<link href="https://csdnimg.cn/release/blogv2/dist/mdeditor/css/editerView/ck_htmledit_views-25cebea3f9.css" rel="stylesheet"/>
+<div class="markdown_views prism-atom-one-dark" id="content_views">
+<svg style="display: none;" xmlns="http://www.w3.org/2000/svg">
+<path d="M5,0 0,2.5 5,5z" id="raphael-marker-block" stroke-linecap="round" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+</svg>
+<p>ZFS（Zettabyte File System）一个打破过去思维的文件系统，是 Sun Microsystems这家公司所开发出来的全新型态文件系统，因为License的问题所以目前只有在Solaris、Mac、BSD上看得到，ZFS是128bit的文件系统，而它到底有多强呢？别再等待了马上用了你就知道，只能说ZFS真是一个上帝赐给IT人员的好礼物。</p>
+<h2><a id="_ZFS_2"></a>为什么选择 ZFS</h2>
+<blockquote>
+<p>ZFS 非常的优秀。这是一个真正现代的文件系统，内置的功能对于处理大量的数据很有意义。<br/> ZFS 消除了建立传统 RAID 阵列（独立磁盘冗余阵列）的需要。 相反，您可以创建 ZFS 池，甚至可以随时将驱动器添加到这些池中。 ZFS 池的行为操作与 RAID 几乎完全相同，但功能内置于文件系统中。<br/> ZFS 也可以替代 LVM （逻辑盘卷管理），使您能够动态地进行分区和管理分区，而无需处理底层的细节，也不必担心相关的风险。<br/> 这也是一个 CoW （写时复制）文件系统。 这里不会提及太多的技术性，这意味着 ZFS 可以保护您的数据免受逐渐损坏的影响。 ZFS 会创建文件的校验和，并允许您将这些文件回滚到以前的工作版本。</p>
+</blockquote>
+<h2><a id="_ZFS_10"></a>安装 ZFS</h2>
+<pre><code class="prism language-bash">在 Ubuntu 上安装 ZFS 非常简单，但对于 最新版本来说，这个 稍有不同。
+
+<span class="token comment"># Ubuntu 16.04 LTS</span>
+<span class="token function">sudo</span> apt <span class="token function">install</span> zfs
+
+<span class="token comment"># Ubuntu 17.04 及以后</span>
+<span class="token function">sudo</span> apt <span class="token function">install</span> zfsutils
+</code></pre>
+<h2><a id="zfs___22"></a>zfs 中的 池，集，卷术语</h2>
+<p>ZFS有三个概念：</p>
+<ol><li> <p>Z池 - zpool</p> </li><li> <p>Z集 - dataset</p> </li><li> <p>Z卷 - volume</p> </li></ol>
+<p>Z池 <code>zpool create local /dev/sdb /dev/sdc /dev/sdd /dev/sde</code> 这就创建了一个名叫local的Z池，Z池有如下类型:raid1，raid0， raid5，raid6 等。</p>
+<p>Z集 当一个Z池创建出来，附带有一个同名的Z集也创建出来了，这里就是 叫 local 这个。注意这个Z集挂载在/local, 这个目录可以做一个正常的目录来用，可以在Z集上创建新的Z集：<code>zfs create local/data</code></p>
+<p>Z卷 创建Z卷：<code>zfs create -V 10G local/vda</code> Z卷是一个块设备，可以按需要分区，格式化：<code>mkfs.xfs /dev/zvol/local/vda</code></p>
+<h2><a id="_38"></a>创建池</h2>
+<p>在 ZFS 中，池大致相当于 RAID 。 它们很灵活且易于操作。<br/> <img alt="在这里插入图片描述" src="https://img-blog.csdnimg.cn/20210219170121875.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L21taDE5ODkxMTEz,size_16,color_FFFFFF,t_70"/></p>
+<p>RAID0</p>
+<pre><code class="prism language-bash"><span class="token comment">#RAID0 只是把你的硬盘集中到一个池子里面，就像一个巨大的驱动器一样。 它可以提高你的驱动器速度，但是如果你的驱动器有损坏，你可能会失丢失数据。</span>
+
+
+<span class="token function">sudo</span> zpool create your-pool /dev/sdc /dev/sdd
+
+</code></pre>
+<p>RAID1（镜像）</p>
+<pre><code class="prism language-bash">您可以在 ZFS 中使用 mirror 关键字来实现 RAID1 功能。 RAID1 会创建一个一对一的驱动器副本。 这意味着您的数据一直在备份。 它也提高了性能。 当然，你将一半的存储空间用于了复制。
+
+<span class="token function">sudo</span> zpool create your-pool mirror /dev/sdc /dev/sdd
+</code></pre>
+<p>RAID5/RAIDZ1</p>
+<pre><code class="prism language-bash">ZFS 将 RAID5 功能实现为 RAIDZ1。 RAID5 要求驱动器至少是 3 个。
+并允许您通过将备份奇偶校验数据写入驱动器空间的 1/n（n 是驱动器数），留下的是可用的存储空间。
+如果一个驱动器发生故障，阵列仍将保持联机状态，但应尽快更换发生故障的驱动器。
+
+<span class="token function">sudo</span> zpool create your-pool raidz1 /dev/sdc /dev/sdd /dev/sde
+</code></pre>
+<p>RAID6/RAIDZ2</p>
+<pre><code class="prism language-bash">RAID6 与 RAID5 几乎完全相同，但它至少需要四个驱动器。 它将奇偶校验数据加倍，最多允许两个驱动器损坏，而不会导致阵列关闭。
+
+<span class="token function">sudo</span> zpool create your-pool raidz2 /dev/sdc /dev/sdd /dev/sde /dev/sdf
+</code></pre>
+<p>RAIDZ3<br/> 3奇偶校验位，允许在丢失数据之前发生3个磁盘故障，性能与RAIDZ2和RAIDZ类似。例如，创建3奇偶校验6 VDEV池：</p>
+<pre><code class="prism language-bash"><span class="token function">sudo</span> zpool create example raidz3 /dev/sdb /dev/sdc /dev/sdd /dev/sde /dev/sdf /dev/sdg
+</code></pre>
+<p>RAID10（条带化镜像）</p>
+<pre><code class="prism language-bash">RAID10 旨在通过数据条带化提高存取速度和数据冗余来成为一个两全其美的解决方案。 你至少需要四个驱动器，但只能使用一半的空间。 您可以通过在同一个池中创建两个镜像来创建 RAID10 中的池。
+
+<span class="token function">sudo</span> zpool create your-pool mirror /dev/sdc /dev/sdd mirror /dev/sde /dev/sdf
+或者
+<span class="token function">sudo</span> zpool create example mirror /dev/sdb /dev/sdc
+<span class="token function">sudo</span> zpool add example mirror /dev/sdd /dev/sde
+</code></pre>
+<p>嵌套RAIDZ （RAID50, RAID60）</p>
+<pre><code class="prism language-bash">$ <span class="token function">sudo</span> zpool create example raidz /dev/sdb /dev/sdc /dev/sdd /dev/sde
+$ <span class="token function">sudo</span> zpool add example raidz /dev/sdf /dev/sdg /dev/sdh /dev/sdi
+</code></pre>
+<p>还有一些管理工具，一旦你创建了你的池，你就必须使用它们来操作。 首先，检查你的池的状态。</p>
+<pre><code class="prism language-bash"><span class="token function">sudo</span> zpool status
+</code></pre>
+<p>当你更新 ZFS 时，你也需要更新你的池。 当您检查它们的状态时，您的池会通知您任何更新。 要更新池，请运行以下命令。</p>
+<pre><code class="prism language-bash"><span class="token function">sudo</span> zpool upgrade your-pool
+</code></pre>
+<p>你也可以更新全部池。</p>
+<pre><code class="prism language-bash"><span class="token function">sudo</span> zpool upgrade -a
+</code></pre>
+<p>您也可以随时将驱动器添加到池中。 告诉 zpool 池的名称和驱动器的位置，它会处理好一切。</p>
+<pre><code class="prism language-bash"><span class="token function">sudo</span> zpool add your-pool /dev/sdx
+</code></pre>
+<p>如果您想破坏池，则可以使用以下命令</p>
+<pre><code class="prism language-bash"><span class="token function">sudo</span> zpool destroy pool-name
+</code></pre>
+<h2><a id="_124"></a>创建数据集</h2>
+<p>当我们创建池的时候，默认就会有个同名的集了。<br/> 例如这样创建一个池，<code>bash sudo zpool create work /dev/sd{b,c,d,e,f,g}1</code>成功之后就会有个 叫 work 的数据集了。</p>
+<pre><code class="prism language-bash">~$ zfs list
+NAME   USED  AVAIL     REFER  MOUNTPOINT
+work   102K  10.5T       24K  /work
+</code></pre>
+<p>默认的还有挂载点 也会是<code>/work</code>, 当然可以修改，创建的时候就指定 加上<code>-m</code>参数。后续更改使用命令：<code>zfs set mountpoint=/fourth work</code></p>
+<p>我们创建其他的数据集</p>
+<pre><code class="prism language-bash">~$ <span class="token function">sudo</span> zfs create work/buildfarm
+
+~$ ll /work/
+total 5
+drwxr-xr-x  3 root root    3 Mar 15 06:37 ./
+drwxr-xr-x 21 root root 4096 Mar 15 06:16 <span class="token punctuation">..</span>/
+drwxr-xr-x  2 root root    2 Mar 15 06:37 buildfarm/
+
+~$ zfs list
+NAME             USED  AVAIL     REFER  MOUNTPOINT
+work             136K  10.5T       24K  /work
+work/buildfarm    24K  10.5T       24K  /work/buildfarm
+
+</code></pre>
+<p>创建命令就是类似这样的：<code>zfs create name_of_pool/name_of_dataset</code>，这和创建子目录很像。还可以继续创建个子集<br/> <code>zfs create work/buildfarm/code</code><br/> 和创建多级目录类似，如果父目录不存在加上-p选项。</p>
+<pre><code class="prism language-bash"><span class="token function">sudo</span> zfs create work/buildfarm/a/b/c/d/e/f
+cannot create <span class="token string">'work/buildfarm/a/b/c/d/e/f'</span><span class="token keyword">:</span> parent does not exist
+
+
+~$ <span class="token function">sudo</span> zfs create -p  work/buildfarm/a/b/c/d/e/f
+
+~$ <span class="token function">sudo</span> zfs list
+NAME                         USED  AVAIL     REFER  MOUNTPOINT
+work                         309K  10.5T       24K  /work
+work/buildfarm               168K  10.5T       24K  /work/buildfarm
+work/buildfarm/a             144K  10.5T       24K  /work/buildfarm/a
+work/buildfarm/a/b           120K  10.5T       24K  /work/buildfarm/a/b
+work/buildfarm/a/b/c          96K  10.5T       24K  /work/buildfarm/a/b/c
+work/buildfarm/a/b/c/d        72K  10.5T       24K  /work/buildfarm/a/b/c/d
+work/buildfarm/a/b/c/d/e      48K  10.5T       24K  /work/buildfarm/a/b/c/d/e
+work/buildfarm/a/b/c/d/e/f    24K  10.5T       24K  /work/buildfarm/a/b/c/d/e/f
+
+</code></pre>
+<p>像这样有多个ZFS数据集有啥用？ 除了逻辑上分离数据外，它们还提供了一种在不同数据集上设置不同属性的方法。<br/> 例如，可以创建一个数据集来存储图像并对其禁用压缩，并创建另一个数据集来存储文本文件并对该图像启用压缩。<br/> 还可以允许管理员应用不同的快照策略，设置每个文件系统可以使用的最大空间（磁盘配额），<br/> 还可以针对不同用途优化属性（例如，调整记录大小以针对存储数据库进行优化）以及许多其他事情。</p>
+<p>当然像上面 一下子创建了多个数据集，能不能把最上面的父数据集删除呢？当然可以，使用 -r 选项</p>
+<pre><code class="prism language-bash">~$ <span class="token function">sudo</span> zfs destroy work/buildfarm/a
+cannot destroy <span class="token string">'work/buildfarm/a'</span><span class="token keyword">:</span> filesystem has children
+use <span class="token string">'-r'</span> to destroy the following datasets:
+work/buildfarm/a/b/c/d/e/f
+work/buildfarm/a/b/c/d/e
+work/buildfarm/a/b/c/d
+work/buildfarm/a/b/c
+work/buildfarm/a/b
+
+~$ <span class="token function">sudo</span> zfs destroy -r work/buildfarm/a
+
+~$ <span class="token function">sudo</span> zfs list
+NAME             USED  AVAIL     REFER  MOUNTPOINT
+work             218K  10.5T       24K  /work
+work/buildfarm    24K  10.5T       24K  /work/buildfarm
+</code></pre>
+<h2><a id="zfs_196"></a>管理zfs快照</h2>
+<pre><code class="prism language-bash">先在  /work/buildfarm 路径下面弄一些文件。创建一百个文本文件
+<span class="token keyword">for</span> i <span class="token keyword">in</span> importantdata<span class="token punctuation">{<!-- --></span>1<span class="token punctuation">..</span>100<span class="token punctuation">}</span><span class="token punctuation">;</span> <span class="token keyword">do</span> pstree -alp <span class="token operator">&gt;</span> <span class="token variable">$i</span><span class="token punctuation">;</span> <span class="token keyword">done</span>
+</code></pre>
+<pre><code class="prism language-bash">
+然后做个快照保存一下
+<span class="token function">sudo</span> zfs snapshot work/buildfarm@1
+</code></pre>
+<p>然后删除 其中一部分文件</p>
+<pre><code class="prism language-bash"><span class="token function">rm</span> importantdata<span class="token punctuation">{<!-- --></span>1<span class="token punctuation">..</span>50<span class="token punctuation">}</span>
+<span class="token function">chmod</span> 755 importantdata<span class="token punctuation">{<!-- --></span>11<span class="token punctuation">..</span>20<span class="token punctuation">}</span>
+</code></pre>
+<pre><code class="prism language-bash">然后可以 zfs <span class="token function">diff</span> 看看和之前的快照的差异
+$ <span class="token function">sudo</span> zfs <span class="token function">diff</span> work/buildfarm@1 work/buildfarm 
+-	/work/buildfarm/importantdata1
+M	/work/buildfarm/importantdata13
+M	/work/buildfarm/importantdata20
+M	/work/buildfarm/
+-	/work/buildfarm/importantdata2
+-	/work/buildfarm/importantdata4
+-	/work/buildfarm/importantdata8
+-	/work/buildfarm/importantdata10
+M	/work/buildfarm/importantdata15
+M	/work/buildfarm/importantdata17
+M	/work/buildfarm/importantdata19
+-	/work/buildfarm/importantdata3
+-	/work/buildfarm/importantdata6
+M	/work/buildfarm/importantdata12
+M	/work/buildfarm/importantdata16
+M	/work/buildfarm/importantdata18
+-	/work/buildfarm/importantdata5
+-	/work/buildfarm/importantdata7
+-	/work/buildfarm/importantdata9
+M	/work/buildfarm/importantdata11
+M	/work/buildfarm/importantdata14
+它显示了已删除，创建，修改和重命名的内容，在输出中由以下前导符号表示：-，+，M，R。 
+</code></pre>
+<p>回滚到之前的某个快照点</p>
+<pre><code class="prism language-bash">zfs rollback work/buildfarm@1
+</code></pre>
+<p>可以克隆一个快照为新的数据集</p>
+<pre><code class="prism language-bash">zfs clone work/buildfarm@1  work/customers/cloneof1
+</code></pre>
+<h2><a id="ZIL_ZFS_Intent_Log_252"></a>ZIL (ZFS Intent Log)写缓存</h2>
+<blockquote>
+<p>ZIL 我们一般使用一个或多个硬盘，正常情况下使用ssd的磁盘，ZIL能记录所有的写操作，然后写到ZIL 的磁盘，因为zfs copy on write的机制，ZIL实际的存储信息很小, 只保存修改的数据，或者是数据块的外部指针, 假如你写入一个大的数据文件，如果设置logbias=troughput, 那么这个所有的写操作是直接到data pool的不经过ZIL, ZIL中只保存数据的指针, 所以说如果设置logbias=troughput,那么使用独立的ZIL设备是没有意义的。 如果logbias=latency，由于zfs对zil的使用有阈值限制, 例如单次提交的写超过阈值则直接写data pool, 否则会写入ZIL之后sync到data pool。这个阈值是通过设置zfs_immediate_write_sz (/etc/system文件)的大小来确定。所有的这些参数的调整要更据你的具体应用场景来确定。</p>
+</blockquote>
+<blockquote>
+<p>ZFS 文件系统也有类似数据库的重做日志，被称为 ZFS Intent Log ，简称 ZIL, 还有个术语，被称为 Separate Intent Log, 简称 SLOG，是指存储 ZIL日志的独立的设备， 手册上提到使用 ZIL 可以提高文件系统性能，还能够用来恢复文件系统</p>
+</blockquote>
+<blockquote>
+<p>这里如果我们不添加独立ZIL设备，实际上pool里面的数据盘上也会又ZIL的存储, 只要是ZFS sync=standard, 值得一提的是sync=always的话，所有文件系统的transaction是直接写到data pool.</p>
+</blockquote>
+<blockquote>
+<p>同步写操作减少对整个data pool的IOPS影响, 使用ssd做ZIL可用降低同步写的延迟, 这一点非常重要，NFS/ISCSI Target/OLTP Database等都是同步写，这里会大大提升性能。</p>
+</blockquote>
+<p>稍微总结下：</p>
+<pre><code>ZIL提供了断电情况下的数据保护。
+在每次同步写发生的情况下避免更新整个磁盘的data structure.
+大量的同步写操作会增加了整个data pool的IOPS的压力，所有需要使用独立的ZIL设备。
+通过SSD作为独立ZIL设备可以加速同步写。甚至我们可以使用多个SSD将ZIL做成Mirror,防止单盘的失效。
+如果你的data pool是全SSD的，又没有独立的ZIL设备，可以直接将logbias=throughput。
+</code></pre>
+<pre><code class="prism language-bash">For example, to add a SSDs to the pool <span class="token string">'mypool'</span>, use: 
+$ <span class="token function">sudo</span> zpool add mypool log /dev/sdg -f
+</code></pre>
+<p>需要注意的是存放log的硬盘若损坏有可能导致数据丢失，如果不能接受这个风险的话考虑给log盘做成mirror模式，命令如下：</p>
+<pre><code class="prism language-bash"><span class="token comment"># 备注： 给 mypool 池增加 SLOG 设备，并且 sda1 , sda2 做成镜像。 </span>
+$ <span class="token function">sudo</span> zpool add mypool log mirror /dev/sda1 /dev/sda2
+
+$ <span class="token function">sudo</span> zpool add ftp-pool log mirror /dev/sda /dev/sdb
+
+</code></pre>
+<h2><a id="ZFS_Cache_Drives__281"></a>ZFS Cache Drives 读缓存</h2>
+<p>高速缓存设备在主内存和磁盘之间提供了一个额外的高速缓存层。它们对于提高主要是静态数据的随机读取性能特别有用。</p>
+<pre><code class="prism language-bash">Fox example, to add a cache drive /dev/sdh to the pool <span class="token string">'mypool'</span>, use:
+
+$ <span class="token function">sudo</span> zpool add mypool cache /dev/sdh -f
+
+<span class="token comment"># 通过 zpool add 加上一顆 SSD 硬盘作為快取使用 (关鍵字是 cache)：</span>
+$ <span class="token function">sudo</span> zpool add ftp-pool cache /dev/disk/by-id/ata-INTEL_SSDSC2BB240G7_PHD12345ABC
+
+</code></pre>
+<h2><a id="ZFS_294"></a>ZFS与数据去重</h2>
+<p>什么是Deduplication?<br/> Deduplication是消除重复数据的过程。去重过程可以基于file-level文件级，block-level块级或者byte-level字节级。使用非常高可能性的hash算法来唯一标识数据块（文件，块，字节）。当使用安全hash，例如SHA256时，hash碰撞的可能性为2的256次方，2^256 = 10\67 或者表示为0.00000000000000000000000000000000000000000000000000000000000000000000000000001。</p>
+<p>选择哪个等级的去重，files,blocks,bytes?<br/> 数据可以在文件级，块级，字节级被去重。<br/> 文件级的去重对文件作为整体来计算hash签名，如果处理的是自然的文件，则此方法需要的消耗最小，但是缺点是对文件的任何修改都需要重新计算文件的hash签名，即对文件的任何修改，将使得此文件之前节约的空间消失，因为两个文件将不再相同。此中方法比较适合类似于文件JPEG，MPEG，但是对于像虚拟机镜像（大文件）文件将无效，因为即使他们只是很小的一部分不同，但是文件级别他们将是不同的文件。<br/> 块级别的去重（相同大小的块），相比文件级的去重，需要更多的计算消耗，但是他能够很好地对像虚拟机镜像类似的大文件去重。大部分的虚拟机镜像文件是重复数据，例如镜像文件中的操作系统部分。使用块级的去重将使得只有镜像特别的数据才占用额外的空间，相同的数据将共享。<br/> 字节级别的去重，将需要更多的计算消耗来决定重复数据的开始和结束区域，不管怎么说，此方法对mail服务器来说是理想的选择，例如一个邮件的附件可能出现很多次，但是使用块级别去重时他们并不能被优化。此类型的去重一般用来一些应用程序的去重中，例如exchangeserver，因为应用程序知道他管理的数据，可以在内部容易地去重。<br/> ZFS提供了块级别的去重技术，此种技术更适合通用的情况。且ZFS使用SHA256来计算hash签名。</p>
+<p>什么时候去重，现在还是将来？<br/> 除了以上描述的文件级，块级，字节级的区别外，去重还可以分为同步（实时或内置）和异步（批处理或离线处理）。在同步去重中，重复文件在出现的时候即被去除，在异步去重中，文件已经存储在磁盘上，然后通过后续的处理来去重（例如在夜间来处理）。异步去重典型地被用在拥有有限的cpu和多线程的存储系统，最小化对日常工作的影响。但是如果cpu的性能足够，同步去重是推荐的方法，因为避免了无用的磁盘的写操作。</p>
+<p>如何使用ZFS的去重</p>
+<p>使用非常的简单，如果你有存储池tank，你需要对tank使用zfs，则设置为：</p>
+<pre><code class="prism language-bash">zfs <span class="token keyword">set</span> dedup<span class="token operator">=</span>on tank
+
+zfs <span class="token keyword">set</span> dedup<span class="token operator">=</span>on local
+zfs <span class="token keyword">set</span> compress<span class="token operator">=</span>lz4 local
+</code></pre>
+<p>是否需要ZFS的去重的权衡</p>
+<p>主要还是取决于你的数据。如果你的数据确实不包含重复，则开启去重功能则会带来额外的开销且没有任何的好处。但是如果你的数据包含重复，则使用zfs的去重可以节约空间而且提高性能。节约空间是显而易见的，性能的提高是因为减少了重复数据的写磁盘消耗和内存页的置换。</p>
+<p>大部分的存储环境都是多种数据的混合，zfs支持对有重复的部分开启去重操作，例如你的存储池包含了home目录，虚拟机镜像目录，源代码目录。此时你可以设置如下：</p>
+<pre><code class="prism language-bash">zfs <span class="token keyword">set</span> dedup<span class="token operator">=</span>off tank/home
+
+zfs <span class="token keyword">set</span> dedup<span class="token operator">=</span>on tank/vm
+
+zfs <span class="token keyword">set</span> dedup<span class="token operator">=</span>on tank/src
+</code></pre>
+<p>信任或验证</p>
+<p>如果两个数据的hash相同，我们则认为两个数据是同一个数据，hash例如SHA256，两个不同数据hash相同的可能性为1/2^256， 是个很小的概率。当然zfs也提供了验证的选项，此选项对两个数据进行全比较来确定他们是否相同，如果不相同则处理，指定verify的语法如下：</p>
+<pre><code class="prism language-bash">zfs <span class="token keyword">set</span> dedup<span class="token operator">=</span>verify tank
+</code></pre>
+<p>hash的选择</p>
+<p>因为不同种类的hash所需要的运算也不相同，一种推荐的方法是使用较弱的hash（需要的运算较少）加verify来提供快速的去重，zfs对应的选项为:</p>
+<pre><code class="prism language-bash">zfs <span class="token keyword">set</span> dedup<span class="token operator">=</span>fletcher4,verify tank
+</code></pre>
+<p>不像SHA256，fletcher4不能被信任为无碰撞，只适合与verify一起使用，verify来确保碰撞的处理。总的来说性能相对要好些。</p>
+<p>通常如果不确定哪种的hash的效率跟高的话，即使用默认的设置dedup=on</p>
+<p>扩展性和效率</p>
+<p>大部分的去重方案都只能针对有限的数据，一般在TB等级，因为他们需要去重数据表常驻在内存。ZFS对数据大大小没有限制，可以处理PB级的数据。但是如果去重数据表常驻内存的话，性能比较好。</p>
+<h2><a id="ZFS_359"></a>ZFS与数据压缩</h2>
+<p>什么是ZFS压缩？<br/> ZFS中的压缩是一个非常简洁的特性：它可以动态压缩文件，因此可以使用有限的存储空间存储更多的数据。</p>
+<p>为什么使用ZFS压缩？<br/> 显然，ZFS压缩的最大好处是可以节省相当多的空间。你的服务器或桌面上的大文件可能会压缩得很好，那么为什么要浪费空间呢？</p>
+<p>以下是一些非常适合ZFS压缩场景的文件：<br/> 新OS版本的ISO映像（不知道您的情况，但我几乎每天都下载）<br/> VirtualBox、KVM或任何其他解决方案的VM映像<br/> Docker容器镜像<br/> 大量应用程序或服务器日志</p>
+<p>为什么禁用压缩？<br/> 像所有好东西一样，ZFS压缩也有成本，特别是压缩和解压缩ZFS数据需要额外的CPU周期。我对这一点的看法是，在桌面系统上，ZFS压缩绝对是一个很好的主意-您很少会将CPU的最大化扩展到ZFS压缩可以注意到的程度，但优化宝贵的SSD存储空间的好处是巨大的。<br/> 在较小的系统上，比如我的一些用于远程RSyslog的嵌入式服务器，这可能是一个破坏者：进入的日志数量可能会高到超出舒适水平的CPU使用率峰值。</p>
+<p>如何检查ZFS压缩</p>
+<pre><code class="prism language-bash">
+$ zfs get all work/share/sean <span class="token operator">|</span><span class="token function">grep</span> compress
+work/share/sean  compressratio         4.32x                  -
+work/share/sean  compression           lz4                    inherited from work/share
+work/share/sean  refcompressratio      4.32x 
+
+<span class="token comment"># 下面是没有开启压缩功能的显示结果</span>
+$ zfs get all newvol <span class="token operator">|</span> <span class="token function">grep</span> compress
+work compressratio         1.00x                  -
+work compression           off                    local
+work refcompressratio      1.00x                  -
+</code></pre>
+<p>如何开启ZFS压缩？<br/> ZFS有多种压缩算法：<br/> gzip - standard UNIX compression.<br/> gzip-N - selects a specific gzip level. gzip-1 provides the fastest gzip compression. gzip-9 provides the best data compression. gzip-6 is the default.<br/> lz4 - provides better compression with lower CPU overhead 这种是比较通用，常用的。<br/> lzjb - optimized for performance while providing decent compression<br/> zle - zero length encoding is useful for datasets with large blocks of zeros</p>
+<pre><code class="prism language-bash"><span class="token comment"># 比较常用的 是 lz4 这个，</span>
+
+$ zfs <span class="token keyword">set</span> compression<span class="token operator">=</span>lz4 newvol
+
+$ zfs <span class="token keyword">set</span> compress<span class="token operator">=</span>lz4 pool/fs
+
+</code></pre>
+<p>如何禁用ZFS压缩？</p>
+<pre><code class="prism language-bash">root@server:~ <span class="token comment"># zfs set compression=off newvol</span>
+
+</code></pre>
+<p>压缩只对新生成的数据有效。<br/> 一件非常重要的事情：当您启用或禁用ZFS压缩时，实际上并没有更改ZFS文件系统上的任何数据。<br/> 这些更改ZFS的行为，意味着将来的任何数据会生效，但当前的数据将保持原样。</p>
+<h2><a id="_420"></a>其他补充</h2>
+<p>下面坐了3组对比，来观察 去重，和压缩 打开关闭的效果。<br/> 这个是打开了 dedup=on 去重复数据的开关的。</p>
+<pre><code>$ zpool list
+NAME   SIZE  ALLOC   FREE  CKPOINT  EXPANDSZ   FRAG    CAP  DEDUP    HEALTH  ALTROOT
+work  10.9T   119M  10.9T        -         -     0%     0%  101.00x    ONLINE  -
+
+$ sudo zdb -b work
+
+Traversing all blocks to verify nothing leaked ...
+
+loading concrete vdev 1, metaslab 348 of 349 ...
+
+	No leaks (block sum matches space maps exactly)
+
+	bp count:                 59858
+	ganged count:                 0
+	bp logical:          7825691648      avg: 130737
+	bp physical:         7813446656      avg: 130533     compression:   1.00
+	bp allocated:       11724856320      avg: 195877     compression:   0.67
+	bp deduped:         11599872000    ref&gt;1:    590   deduplication:   1.99
+	Normal class:         124984320     used:  0.00%
+
+	additional, non-pointer bps of type 0:         32
+	Dittoed blocks on same vdev: 114
+
+
+</code></pre>
+<p>这个是没有打开 dedup=on 去重复数据的开关的。</p>
+<pre><code>$ zpool list
+NAME   SIZE  ALLOC   FREE  CKPOINT  EXPANDSZ   FRAG    CAP  DEDUP    HEALTH  ALTROOT
+work  10.9T  7.28G  10.9T        -         -     0%     0%  1.00x    ONLINE  -
+
+$ sudo zdb -b work
+
+Traversing all blocks to verify nothing leaked ...
+
+loading concrete vdev 5, metaslab 115 of 116 ...
+
+	No leaks (block sum matches space maps exactly)
+
+	bp count:                 59830
+	ganged count:                 0
+	bp logical:          7825523712      avg: 130795
+	bp physical:         7813270528      avg: 130591     compression:   1.00
+	bp allocated:        7816024064      avg: 130637     compression:   1.00
+	bp deduped:                   0    ref&gt;1:      0   deduplication:   1.00
+	Normal class:        7816024064     used:  0.07%
+
+	additional, non-pointer bps of type 0:         40
+</code></pre>
+<p>打开去重和压缩的。</p>
+<pre><code>$ zpool list
+NAME   SIZE  ALLOC   FREE  CKPOINT  EXPANDSZ   FRAG    CAP  DEDUP    HEALTH  ALTROOT
+work  10.9T  15.3M  10.9T        -         -     0%     0%  101.00x    ONLINE  -
+
+$ sudo zdb -b work
+
+Traversing all blocks to verify nothing leaked ...
+
+loading concrete vdev 5, metaslab 115 of 116 ...
+
+	No leaks (block sum matches space maps exactly)
+
+	bp count:                 59899
+	ganged count:                 0
+	bp logical:          7825843200      avg: 130650
+	bp physical:          948596736      avg:  15836     compression:   8.25
+	bp allocated:         951911424      avg:  15891     compression:   8.22
+	bp deduped:           936140800    ref&gt;1:    590   deduplication:   1.98
+	Normal class:          15770624     used:  0.00%
+
+	additional, non-pointer bps of type 0:         40
+</code></pre>
+<p>销毁池</p>
+<pre><code>sudo zpool destroy work
+</code></pre>
+<p>6个硬盘，3个组成raid5，然后在2组组成raid0了。可用空间大概是4个2TB。</p>
+<pre><code>sudo zpool create work raidz1 /dev/sd{b,c,d}1
+sudo zpool add -f work raidz1 /dev/sd{e,f,g}1
+work            7.1T  7.3G  7.1T   1% /work
+</code></pre>
+<p>6个硬盘，直接组成raid0，</p>
+<pre><code>sudo zpool create work /dev/sd{b,c,d,e,f,g}1
+work             11T  128K   11T   1% /work
+</code></pre>
+<p>打开去重和压缩功能</p>
+<pre><code>$ sudo zfs set dedup=on work
+$ sudo zfs set compression=lz4 work
+</code></pre>
+<h1><a id="1_522"></a>问题1</h1>
+<p>我们在创建 池 的时候 应该使用 /dev/sda /dev/sdb 这样的呢？ /dev/sda1 /dev/sdb1 这样的呢？有或者是 /dev/disk/by-id/ 呢？</p>
+<p>通过谷歌，发现一个类似的，https://unix.stackexchange.com/questions/474371/how-do-i-create-a-zpool-using-uuid-or-truly-unique-identifier<br/> 其中有个回答是：</p>
+<pre><code>UUID is not always visible, (specially in VM env) I suggest to create a partition table and use PARTUUID
+简单翻译一下： UUID并不总是可见的（特别是在vm   env中，说的是vm虚拟机？？），我建议创建一个分区表并使用PARTUUID 
+
+after you are able to list the desidered partition
+lsblk --ascii -o NAME,PARTUUID,LABEL,PATH,FSTYPE
+zpool create pool02 /dev/disk/by-partuuid/c8e0c300-5ec9-714c-aef9-fa0dc3f0cab6
+这个人的回答是建议 先把硬盘分区，然后使用partuuid来创建池。
+
+there no performance penalties when partition table against entire raw disk and examining the partition table may save your work in case of Disaster recovery
+ 在对整个原始磁盘进行分区表并检查分区表时，没有性能损失，这样可以在灾难恢复时节省您的工作 
+ 
+ 这个第一个回答是 建议 先 分区， 然后使用 PARTUUID 来创建池。可以看到是 不建议使用 /dev/sda 这样的，因为重启系统这个顺序可能会变。
+</code></pre>
+<p>这个下面还有个回答：</p>
+<pre><code>I got past this using the Arch documentation for ZFS: Creating a storage pool.https://wiki.archlinux.org/index.php/ZFS#Creating_a_storage_pool
+
+Got the Disk SerialNumber-based IDs (not uuids) Persistent block device naming;by-id and by-path.https://wiki.archlinux.org/index.php/Persistent_block_device_naming#by-id_and_by-path
+
+'by-id creates a unique name depending on the hardware serial number, by-id also creates World Wide Name links of storage devices that support it. Unlike other by-id links, WWNs are fully persistent and will not change depending on the used subsystem. '
+ 'by id根据硬件序列号创建唯一的名称，by id还创建支持它的存储设备的全球通用名称链接。与其他按id链接不同，WWN（World Wide Name）是完全持久的，不会因使用的子系统而改变 
+
+
+user@ubuntu:~$ ls -lh /dev/disk/by-id/
+total 0
+lrwxrwxrwx 1 root root  9 Oct  9 17:04 ata-HGST_HUH728080ALN600_VJH620YX -&gt; ../../sda
+lrwxrwxrwx 1 root root  9 Oct  9 17:04 ata-HGST_HUH728080ALN600_VJH624KX -&gt; ../../sdc
+lrwxrwxrwx 1 root root  9 Oct  9 17:04 ata-Samsung_SSD_850_EVO_120GB_S21SNX0H915160K -&gt; ../../sdd
+lrwxrwxrwx 1 root root 10 Oct  9 17:04 ata-Samsung_SSD_850_EVO_120GB_S21SNX0H915160K-part1 -&gt; ../../sdd1
+lrwxrwxrwx 1 root root 10 Oct  9 17:04 ata-Samsung_SSD_850_EVO_120GB_S21SNX0H915160K-part2 -&gt; ../../sdd2
+lrwxrwxrwx 1 root root  9 Oct  9 17:04 ata-Samsung_SSD_850_EVO_120GB_S21SNX0H915161E -&gt; ../../sde
+lrwxrwxrwx 1 root root 10 Oct  9 17:04 ata-Samsung_SSD_850_EVO_120GB_S21SNX0H915161E-part1 -&gt; ../../sde1
+lrwxrwxrwx 1 root root 10 Oct  9 17:04 ata-Samsung_SSD_850_EVO_120GB_S21SNX0H915161E-part2 -&gt; ../../sde2
+lrwxrwxrwx 1 root root  9 Oct  9 17:04 md-name-ubuntu:0 -&gt; ../../md0
+lrwxrwxrwx 1 root root  9 Oct  9 17:04 md-name-ubuntu:1 -&gt; ../../md1
+lrwxrwxrwx 1 root root  9 Oct  9 17:04 md-uuid-3d09d690:61103c87:abb6c286:e58cf8ae -&gt; ../../md0
+lrwxrwxrwx 1 root root  9 Oct  9 17:04 md-uuid-bb4a8e51:48de3c04:435fd48b:a763b176 -&gt; ../../md1
+lrwxrwxrwx 1 root root 13 Oct  9 17:04 nvme-eui.0025385481b1ea19 -&gt; ../../nvme2n1
+lrwxrwxrwx 1 root root 15 Oct  9 17:04 nvme-eui.0025385481b1ea19-part1 -&gt; ../../nvme2n1p1
+lrwxrwxrwx 1 root root 13 Oct  9 19:11 nvme-eui.0025385581b40c9c -&gt; ../../nvme0n1
+lrwxrwxrwx 1 root root 13 Oct  9 19:11 nvme-eui.0025385581b40e03 -&gt; ../../nvme1n1
+lrwxrwxrwx 1 root root 13 Oct  9 17:04 nvme-Samsung_SSD_960_EVO_1TB_S3X3NF0K400271N -&gt; ../../nvme2n1
+lrwxrwxrwx 1 root root 15 Oct  9 17:04 nvme-Samsung_SSD_960_EVO_1TB_S3X3NF0K400271N-part1 -&gt; ../../nvme2n1p1
+lrwxrwxrwx 1 root root 13 Oct  9 19:11 nvme-Samsung_SSD_970_EVO_1TB_S467NF0K510805L -&gt; ../../nvme0n1
+lrwxrwxrwx 1 root root 13 Oct  9 19:11 nvme-Samsung_SSD_970_EVO_1TB_S467NF0K511164Z -&gt; ../../nvme1n1
+lrwxrwxrwx 1 root root  9 Oct  9 17:04 usb-Samsung_Flash_Drive_0373617100005284-0:0 -&gt; ../../sdb
+lrwxrwxrwx 1 root root 10 Oct  9 17:04 usb-Samsung_Flash_Drive_0373617100005284-0:0-part1 -&gt; ../../sdb1
+lrwxrwxrwx 1 root root  9 Oct  9 17:04 wwn-0x5000cca261d0d95a -&gt; ../../sda
+lrwxrwxrwx 1 root root  9 Oct  9 17:04 wwn-0x5000cca261d0d9ca -&gt; ../../sdc
+lrwxrwxrwx 1 root root  9 Oct  9 17:04 wwn-0x5002538d413f3b81 -&gt; ../../sdd
+lrwxrwxrwx 1 root root 10 Oct  9 17:04 wwn-0x5002538d413f3b81-part1 -&gt; ../../sdd1
+lrwxrwxrwx 1 root root 10 Oct  9 17:04 wwn-0x5002538d413f3b81-part2 -&gt; ../../sdd2
+lrwxrwxrwx 1 root root  9 Oct  9 17:04 wwn-0x5002538d413f3b87 -&gt; ../../sde
+lrwxrwxrwx 1 root root 10 Oct  9 17:04 wwn-0x5002538d413f3b87-part1 -&gt; ../../sde1
+lrwxrwxrwx 1 root root 10 Oct  9 17:04 wwn-0x5002538d413f3b87-part2 -&gt; ../../sde2
+
+user@ubuntu:~$ sudo zpool create nvme-tank mirror nvme-Samsung_SSD_970_EVO_1TB_S467NF0K510805L nvme-Samsung_SSD_970_EVO_1TB_S467NF0K511164Z
+user@ubuntu:~$ blkid
+/dev/sdb1: UUID="1977-5195" TYPE="vfat" PARTUUID="117c616a-01"
+/dev/sdd1: UUID="3d09d690-6110-3c87-abb6-c286e58cf8ae" UUID_SUB="481418c7-ff1c-3ee6-21e1-48be73d0a083" LABEL="ubuntu:0" TYPE="linux_raid_member" PARTUUID="edbfb533-01"
+/dev/sdd2: UUID="bb4a8e51-48de-3c04-435f-d48ba763b176" UUID_SUB="3cd3b591-6c08-23df-c885-812b8a4dae09" LABEL="ubuntu:1" TYPE="linux_raid_member" PARTUUID="edbfb533-02"
+/dev/sde1: UUID="3d09d690-6110-3c87-abb6-c286e58cf8ae" UUID_SUB="294836fe-a958-5aa8-f9e7-fcb0d5b3ad68" LABEL="ubuntu:0" TYPE="linux_raid_member" PARTUUID="870c34a5-01"
+/dev/sde2: UUID="bb4a8e51-48de-3c04-435f-d48ba763b176" UUID_SUB="4f2b1400-7d20-79f5-106f-33fdb0dafc36" LABEL="ubuntu:1" TYPE="linux_raid_member" PARTUUID="870c34a5-02"
+/dev/md1: UUID="be1c70fd-3000-4a69-9106-efc73309693d" TYPE="ext4"
+/dev/md0: UUID="4c0b7a2c-1b40-4979-868a-0e363bcbe771" TYPE="swap"
+/dev/nvme2n1p1: UUID="24d22c02-be8f-41ba-9907-9494b03c16bb" TYPE="ext4" PARTUUID="edc5ee37-01"
+/dev/nvme1n1: LABEL="nvme-tank" UUID="12820183881567404585" UUID_SUB="7696346709622828030" TYPE="zfs_member"
+
+
+这边还附赠一个不销毁原来的池的做法，怎么把 /dev/sda 这样的 改成 by-id 的。 Changing ZFS pool to use disk ID instead of disk assignment https://blog.khmersite.net/2013/09/changing-zfs-pool-to-use-disk-id-instead-of-disk-assignment/
+
+
+第二个回答 是建议使用  disk/ by-id 这样的，也是不建议使用  /dev/sda 这样的，因为重启系统这个顺序可能会变。
+</code></pre>
+<pre><code>这个还搜到 一个 https://www.peterdavehello.org/2019/11/zfs-on-ubuntu-18-04-basic-initialize/
+
+里面也说到了。
+我这边是要直接拿完整的整颗硬盘来用，不另外做分割，测试的时候方便起见可以直接用/dev/sda /dev/sdb这样的路径
+$ sudo zpool create pool-ftp raidz3 /dev/sda /dev/sdd /dev/sde /dev/sdf /dev/sdg /dev/sdh /dev/sdi /dev/sdj /dev/sdk /dev/sdl /dev/sdm /dev/sdn /dev/sdo /dev/sdp /dev/sdq /dev/sdr /dev/sds /dev/sdt /dev/sdu /dev/sdv /dev/sdw /dev/sdx /dev/sdy /dev/sdz
+
+不过正式环境还是建议不要使用sda / sdb而是使用Disk ID / Label / UUID的方式来认硬盘，就不用担心未来顺序可能改变或乱掉的问题，如果是整批相同型号的硬盘要做处理，透过Disk ID其实也很方便，例如： 
+$ command ls /dev/disk/by-id/ata-ST8000NM0055* | xargs sudo zpool create ftp-pool
+
+</code></pre>
+<pre><code>arch linux 百科里面也提到的。https://wiki.archlinux.org/title/ZFS
+
+It is not necessary to partition the drives before creating the ZFS filesystem. It is recommended to point ZFS at an entire disk (ie. /dev/sdx rather than /dev/sdx1), which will automatically create a GPT partition table and add an 8 MB reserved partition at the end of the disk for legacy bootloaders. However, you can specify a partition or a file within an existing filesystem, if you wish to create multiple volumes with different redundancy properties. 
+在创建ZFS文件系统之前，不必对驱动器进行分区。建议将ZFS指向整个磁盘（即/dev/sdx而不是/dev/sdx1），这将自动创建一个GPT分区表，并在磁盘末尾为旧引导加载程序添加一个8mb的保留分区。但是，如果要创建具有不同冗余属性的多个卷，可以在现有文件系统中指定分区或文件。 
+
+ZFS on Linux recommends using device IDs when creating ZFS storage pools of less than 10 devices. Use Persistent block device naming#by-id and by-path to identify the list of drives to be used for ZFS pool. 
+Linux上的ZFS建议在创建少于10个设备的ZFS存储池时使用设备ID。使用 Persistent block device naming#by-id and by-path 标识要用于ZFS池的驱动器列表。 
+$ ls -lh /dev/disk/by-id/
+lrwxrwxrwx 1 root root  9 Aug 12 16:26 ata-ST3000DM001-9YN166_S1F0JKRR -&gt; ../../sdc
+lrwxrwxrwx 1 root root  9 Aug 12 16:26 ata-ST3000DM001-9YN166_S1F0JTM1 -&gt; ../../sde
+lrwxrwxrwx 1 root root  9 Aug 12 16:26 ata-ST3000DM001-9YN166_S1F0KBP8 -&gt; ../../sdd
+lrwxrwxrwx 1 root root  9 Aug 12 16:26 ata-ST3000DM001-9YN166_S1F0KDGY -&gt; ../../sdb
+
+Warning: If you create zpools using device names (e.g. /dev/sda,/dev/sdb,...) ZFS might not be able to detect zpools intermittently on boot.
+ 警告：如果使用设备名称（例如，/dev/sda，/dev/sdb，…）创建zpool，ZFS可能无法检测到池，在重启系统后。 
+
+后面继续提到了 可以使用 $ ls -l /dev/disk/by-partlabel 的路径来创建池。
+$ ls -l /dev/disk/by-partlabel
+
+lrwxrwxrwx 1 root root 10 Apr 30 01:44 zfsdata1 -&gt; ../../sdd1
+lrwxrwxrwx 1 root root 10 Apr 30 01:44 zfsdata2 -&gt; ../../sdc1
+lrwxrwxrwx 1 root root 10 Apr 30 01:59 zfsl2arc -&gt; ../../sda1
+
+$ ls -l /dev/disk/by-partuuid
+
+lrwxrwxrwx 1 root root 10 Apr 30 01:44 148c462c-7819-431a-9aba-5bf42bb5a34e -&gt; ../../sdd1
+lrwxrwxrwx 1 root root 10 Apr 30 01:59 4f95da30-b2fb-412b-9090-fc349993df56 -&gt; ../../sda1
+lrwxrwxrwx 1 root root 10 Apr 30 01:44 e5ccef58-5adf-4094-81a7-3bac846a885f -&gt; ../../sdc1
+
+
+</code></pre>
+</div>
+<link href="https://csdnimg.cn/release/blogv2/dist/mdeditor/css/editerView/markdown_views-98b95bb57c.css" rel="stylesheet"/>
+<link href="https://csdnimg.cn/release/blogv2/dist/mdeditor/css/style-c216769e99.css" rel="stylesheet"/>
+</div>
+<div id="treeSkill"></div>
+</article>
+<script>
+  $(function() {
+    setTimeout(function () {
+      var mathcodeList = document.querySelectorAll('.htmledit_views img.mathcode');
+      if (mathcodeList.length > 0) {
+        for (let i = 0; i < mathcodeList.length; i++) {
+          if (mathcodeList[i].naturalWidth === 0 || mathcodeList[i].naturalHeight === 0) {
+            var alt = mathcodeList[i].alt;
+            alt = '\\(' + alt + '\\)';
+            var curSpan = $('<span class="img-codecogs"></span>');
+            curSpan.text(alt);
+            $(mathcodeList[i]).before(curSpan);
+            $(mathcodeList[i]).remove();
+          }
+        }
+        MathJax.Hub.Queue(["Typeset",MathJax.Hub]);
+      }
+    }, 1000)
+  });
+</script>
+</div></html>

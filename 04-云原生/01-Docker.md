@@ -34,7 +34,7 @@ $ yum remove docker \
                   docker-latest-logrotate \
                   docker-logrotate \
                   docker-engine
-$ sudo remove -rf /var/lib/docker
+$ sudo rm -rf /var/lib/docker
 
 # 设置安装工具
 $ yum install -y yum-utils

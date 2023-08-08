@@ -151,6 +151,8 @@ https://www.cnblogs.com/zhoujinyi/p/11955131.html
 
     ```shell
     $ curl 'http://localhost:9090/api/v1/query?query=label_replace(kube_node_labels{workspace="10002341",app="js-yangzhou-3-kube",label_kube_ovn_role='master'}, 'ip', '$1', 'node','(.*)')&time=1609316507
+    
+    $ curl http://100.94.179.32:9090/api/v1/query? --data-urlencode 'query=node_dmi_info{}' | jq '.'
     ```
 
   + **v1: labels  查询标签名**

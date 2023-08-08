@@ -187,6 +187,15 @@ LIMIT
 set global slow_query_log=ON  -- 开启慢查询
 set global long_query_time=2  -- 超过2s算作慢查询，记录到日志中
 set global long_querise_not_using_indexex=ON  -- 记录下没有使用索引的查询语句
+
+# 慢查询相关配置
+show variables like '%slow_query%';
+# 查看正在执行的进程
+show processlist;
+# 查看当前事务信息
+SELECT * FROM INFORMATION_SCHEMA.INNODB_TRX\G;
+# 查看当前事务持有锁信息
+SELECT * FROM performance_schema.data_locks\G;
 ```
 
 ### 执行计划
@@ -300,6 +309,8 @@ Server层:
 ### binlog（归档日志）
 
 > `作用`：由 Server 层生成，可以用于 数据库归档 和 **主备同步**。
+>
+> `查看`：https://www.cnblogs.com/---wunian/p/8992900.html  mysqlbinlog --base64-output=decode-rows -v bin.000001
 
 ### redolog 和 binlog 的区别
 
@@ -520,12 +531,7 @@ public class ReadWriteLock {
 
 
 
-## 4. MySQL 主从配置
-
-### MySQL 搭建模式
-
-+ **单点模式**：顾名思义，存在单点风险。
-+ **主从模式**：集群，主节点宕机可使用备份节点，提高可用性；同时可在此基础上加 **读写分离、数据分片**，提高查询性能。
+## 4. MySQL 部署
 
 
 
@@ -591,19 +597,42 @@ public class ReadWriteLock {
 
 
 
-### MySQL 读写分离 + 数据分片 
-
-> 常用中间件：<u>**Sharding-Sphere**</u>、Mycat
 
 
+### MySQL MGR模式
 
-### MySQL 高可用 + 复制（MGR/MHA）
+**MGR组复制 MySQL Group Replication**
 
-https://www.cnblogs.com/xiaoyuxixi/p/13814811.html
+select from performance_schema.replication_group_members;
 
-**异步复制、半同步复制、组复制**
+https://blog.csdn.net/sinat_36757755/article/details/124547156
 
-https://blog.51cto.com/u_13691477/5532108
+https://blog.csdn.net/tonghu_note/article/details/123885596
+
+
+
+
+
+
+
+### MySQL 读写分离
+
+**ProxySQL**
+
+所谓组的配置，即定义读组、写组等，可以使用如下两个表来定义读写组：
+
+- mysql_replication_hostgroups：该表用于传统的master/slave的异步复制或者半同步复制的配置。
+- mysql_group_replication_hostgroups:该表用于MySQL Group Replication、InnoDB Cluster or Galera/Percona XtraDB Cluster的配置
+
+**for master/slave**
+
+https://proxysql.com/documentation/ProxySQL-Configuration/
+
+**for mgr**
+
+https://blog.csdn.net/tonghu_note/article/details/124208003
+
+
 
 
 

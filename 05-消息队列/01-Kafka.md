@@ -277,3 +277,8 @@
 + 消费端：关闭 **拉取消息后 offset 自动提交**，改成 **处理完消息后** 手动提交offset，再自行解决幂等
 + 生产端：设置 **request.required.acks = -1**, 保证数据在集群中强一致，如果失败则不断重试 **message.send.max.retries = bigint** 
 
+
+
+### 命令行工具
+
+https://juejin.cn/post/7022145069851361311

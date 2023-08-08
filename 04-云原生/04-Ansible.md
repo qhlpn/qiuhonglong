@@ -36,6 +36,8 @@ vim /etc/ansible/ansible.cfg
 host_key_checking = False               # 检查对应服务器的host_key，建议取消注释
 log_path=/var/log/ansible.log           # 日志文件,建议取消注释
 module_name   = command                 # 默认模块
+
+stdout_callback = yaml                  # 输出日志格式化
 ```
 
 ### 主机清单
@@ -112,285 +114,58 @@ Inventory 主机清单
       绿色：执行成功并且不需要做改变的操作
       黄色：执行成功并且对目标主机做变更
       红色：执行失败
-  ```
-
-+ **ansible-playbook**：执行playbook脚本
-
-  ```
-  ansible-playbook hello.yml
-  ```
-
   
-
-### 常用模块
-
-```
-Command：在远程主机执行命令
-Shell：在远程主机执行shell语句
-Script：在远程主机上运行ansible服务器上的脚
-Copy：从主控端复制文件到远程主机
-Fetch：从远程主机提取文件至主控端，copy相反，目前不支持目录,可以先打包,再提取文件
-File：设置文件属性    
-Unarchive：解包解压缩，有两种用法：
-Archive：打包压缩
-Hostname：管理主机名
-Cron：远程主机定时任务
-Yum：管理包
-Service：管理服务
-User：管理用户
-Group：管理组
-Lineinfile | Replace：流式修改文件内容
-Setup：收集主机系统信息
-```
+  ansible -i hosts all -m shell -a "uname -r" -b
+  ```
 
 
 ### Playbook
-```
-用户通过ansible命令直接调用yml语言写好的playbook，playbook由多条play组成
-每条play都有一个任务(task)相对应的操作，然后调用模块modules，应用在主机清单上
-通过ssh远程连接，从而控制远程主机或者网络设备
-ansibel具有幂等性，多次playbook执行后的主机状态应相同
-```
 + **运行指令**
 
   ```
   ansible-playbook <filename.yml> ... [options]
   
   常见选项
-      --check -C       只检测可能会发生的改变，但不真正执行操作 
-                       (只检查语法,如果执行过程中出现问题,-C无法检测出来)
-                       (执行playbook生成的文件不存在,后面的程序如果依赖这些文件,也会导致检测失败)
-      --list-hosts     列出运行任务的主机
-      --list-tags      列出tag  (列出标签)
-      --list-tasks     列出task (列出任务)
-      --limit 		 主机列表 只针对主机列表中的主机执行
-      -v -vv -vvv      显示过程
+  
+  -u REMOTE_USER, --user=REMOTE_USER  
+  ＃ ssh 连接的用户名
+  -k, --ask-pass    
+  ＃ssh登录认证密码
+  -s, --sudo           
+  ＃sudo 到root用户，相当于Linux系统下的sudo命令
+  -U SUDO_USER, --sudo-user=SUDO_USER    
+  ＃sudo 到对应的用户
+  -K, --ask-sudo-pass     
+  ＃用户的密码（—sudo时使用）
+  -T TIMEOUT, --timeout=TIMEOUT 
+  ＃ ssh 连接超时，默认 10 秒
+  -C, --check      
+  ＃ 指定该参数后，执行 playbook 文件不会真正去执行，而是模拟执行一遍，然后输出本次执行会对远程主机造成的修改
+  
+  -e EXTRA_VARS, --extra-vars=EXTRA_VARS    
+  ＃ 设置额外的变量如：key=value 形式 或者 YAML or JSON，以空格分隔变量，或用多个-e
+  
+  -f FORKS, --forks=FORKS    
+  ＃ 进程并发处理，默认 5
+  -i INVENTORY, --inventory-file=INVENTORY   
+  ＃ 指定 hosts 文件路径，默认 default=/etc/ansible/hosts
+  -l SUBSET, --limit=SUBSET    
+  ＃ 指定一个 pattern，对- hosts:匹配到的主机再过滤一次
+  --list-hosts  
+  ＃ 只打印有哪些主机会执行这个 playbook 文件，不是实际执行该 playbook
+  --list-tasks   
+  ＃ 列出该 playbook 中会被执行的 task
+  
+  --private-key=PRIVATE_KEY_FILE   
+  ＃ 私钥路径
+  --step    
+  ＃ 同一时间只执行一个 task，每个 task 执行前都会提示确认一遍
+  --syntax-check  
+  ＃ 只检测 playbook 文件语法是否有问题，不会执行该 playbook 
+  -t TAGS, --tags=TAGS   
+  ＃当 play 和 task 的 tag 为该参数指定的值时才执行，多个 tag 以逗号分隔
+  --skip-tags=SKIP_TAGS   
+  ＃ 当 play 和 task 的 tag 不匹配该参数指定的值时，才执行
+  -v, --verbose   
+  ＃输出更详细的执行过程信息，-vvv可得到所有执行过程信息。
   ```
-
-+ **核心元素**
-
-  ```
-  Hosts         	 执行的远程主机列表(应用在哪些主机上)
-  Tasks         	 任务集
-  Variables     	 内置变量或自定义变量在playbook中调用
-  Templates  	     可替换模板文件中的变量并实现一些简单逻辑的文件
-  Handlers Notify  结合使用，由特定条件触发的操作，满足条件方才执行，否则不执行
-  Tags     	     指定某条任务执行，用于选择运行playbook中的部分代码。
-  ```
-
-  + **hosts**
-
-    ```
-    - hosts: websrvs
-        remote_user: root   (可省略,默认为root)  以root身份连接
-        gather_facts: no   # 不收集主机信息，提高速度
-    ```
-
-  + **tasks**
-
-    ```
-    两种格式：
-        (1) action: module arguments
-        (2) module: arguments 建议使用  模块: 参数
-    tasks:
-      - name: disable selinux   描述
-        command: /sbin/setenforce 0   模块名: 模块对应的参数
-    ```
-    
-  + **handlers**
-
-    ```
-    触发器 handlers 也是一个是 task 列表
-    这些 task 与前述的 task 并没有本质上的不同
-    与 notify 配合，可用于在每个 play 的最后被触发 
-    这样可避免多次有改变发生时每次都执行指定的操作，仅在所有的变化发生完成后一次性地执行指定操作。
-    
-    - hosts: websrvs
-      remote_user: root
-      
-      tasks:
-        - name: add group nginx
-          tags: user
-          user: name=nginx state=present
-        - name: add user nginx
-          user: name=nginx state=present group=nginx
-        - name: Install Nginx
-          yum: name=nginx state=present
-        - name: config
-          copy: src=/root/config.txt dest=/etc/nginx/nginx.conf
-          notify:
-            - Restart Nginx
-            - Check Nginx Process
-      
-      handlers:
-        - name: Restart Nginx
-          service: name=nginx state=restarted enabled=yes
-        - name: Check Nginx process
-          shell: killall -0 nginx > /tmp/nginx.log
-    ```
-    
-  + **tags**
-    
-    ```
-    可以指定某一个任务添加一个标签，添加标签以后，想执行某个动作可以做出挑选来执行
-
-    - hosts: websrvs
-      remote_user: root
-      
-      tasks:
-        - name: Install httpd
-          yum: name=httpd state=present
-          tage: install 
-        - name: Install configure file
-          copy: src=files/httpd.conf dest=/etc/httpd/conf/
-          tags: conf
-        - name: start httpd service
-          tags: service
-          service: name=httpd state=started enabled=yes
-
-    ansible-playbook –t install,conf httpd.yml   指定执行install,conf 两个标签
-    ```
-
-  + **variables**
-
-    ```
-    变量名：仅能由字母、数字和下划线组成，且只能以字母开头
-    变量来源：
-        1 ansible setup facts 系统变量
-           setup 模块可以实现系统信息的显示
-                 可以返回每个主机的系统信息包括:版本、主机名、cpu、内存
-           ansible all -m setup -a 'filter="ansible_nodename"'     查询主机名    
-        2 /etc/ansible/hosts 定义
-            普通变量：主机组中主机单独定义，优先级高于公共变量（单个主机）
-            公共（组）变量：针对主机组中所有主机定义统一变量（一组主机的同一类别）
-        3 命令行 定义，优先级最高
-           ansible-playbook –e varname=value  
-        4 vars 定义
-           vars:
-            - var1: value1
-            - var2: value2    
-        6 role 定义：defaults/main.yml
-        7 set_fact 定义
-        	set_fact:
-        	  key: value
-    
-    变量定义：key=value
-    
-    变量调用方式：
-        1 通过 {{ variable_name }} 调用变量，且变量名前后必须有空格
-        2 ansible-playbook –e 直接定义并调用
-          ansible-playbook test.yml -e "hosts=www user=magedu"
-          
-      
-    1. 在主机清单中定义变量,在ansible中使用变量
-      vim /etc/ansible/hosts
-      [appsrvs]
-      192.168.38.17 http_port=817 name=www
-      192.168.38.27 http_port=827 name=web
-    
-    调用变量
-    ansible appsrvs -m hostname -a'name={{name}}'  更改主机名为各自被定义的变量 
-    
-    2. 使用 setup 变量
-    - hosts: websrvs
-      remote_user: root
-      tasks:
-        - name: create log file
-          file: name=/var/log/ {{ ansible_fqdn }} state=touch
-          
-    3. 使用文件变量
-      cat vars.yml
-      var1: httpd
-      var2: nginx
-    
-      cat var.yml
-      - hosts: web
-        remote_user: root
-        vars_files:      # 🍟
-          - vars.yml
-      tasks:
-        - name: create httpd log
-          file: name=/app/{{ var1 }}.log state=touch
-        - name: create nginx log
-        file: name=/app/{{ var2 }}.log state=touch
-    
-    优先级：
-      https://www.cnblogs.com/mauricewei/p/10054300.html
-    ```
-
-  + **templates**
-
-    ```
-    文本文件，嵌套有脚本（使用模板编程语言编写） 借助模板生成真正的文件
-    Jinja2语言，使用字面量，有下面形式
-          字符串：使用单引号或双引号
-          数字：整数，浮点数
-          列表：[item1, item2, ...]
-          元组：(item1, item2, ...)
-          字典：{key1:value1, key2:value2, ...}
-          布尔型：true/false
-    算术运算：+, -, *, /, //, %, **
-      比较操作：==, !=, >, >=, <, <=
-    逻辑运算：and，or，not
-      流表达式：For，If，When
-    ```
-
-  + **when**
-
-    ```
-    条件测试:如果需要根据变量、facts或此前任务的执行结果来做为某task执行与否的前提时要用到条件测试,
-    通过when语句实现，在task中使用，jinja2的语法格式
-    
-    when语句
-        在task后添加when子句即可使用条件测试；when语句支持Jinja2表达式语法
-    示例：
-    tasks:
-      - name: "shutdown RedHat flavored systems"
-        command: /sbin/shutdown -h now
-        when: ansible_os_family == "RedHat"  当系统属于红帽系列,执行command模块 
-    
-    when语句中还可以使用Jinja2的大多"filter"，
-    例如要忽略此前某语句的错误并基于其结果(failed或者success)运行后面指定的语句，
-    可使用类似如下形式：
-    tasks:
-      - command: /bin/false
-        register: result
-        ignore_errors: True
-      - command: /bin/something
-        when: result|failed
-      - command: /bin/something_else
-        when: result|success
-      - command: /bin/still/something_else
-        when: result|skipped
-    
-    此外，when语句中还可以使用facts或playbook中定义的变量
-    ```
-
-  + **with_items**
-
-    ``` 
-    循环：当有需要重复性执行的任务时，可以使用迭代机制
-    对迭代项的引用，固定变量名为 item
-    列表格式可以是字符串或者是字典
-    
-    示例： 创建用户
-    - name: add several users
-      user: name={{ item }} state=present groups=wheel   #{{ item }} 系统自定义变量
-      with_items:       # 定义{{ item }} 的值和个数
-        - testuser1
-        - testuser2
-    
-    上面语句的功能等同于下面的语句：
-    - name: add user testuser1
-      user: name=testuser1 state=present groups=wheel
-    - name: add user testuser2
-      user: name=testuser2 state=present groups=wheel
-    
-    ```
-
-  + **roles**
-
-    ```
-    roles 通过分别将变量、文件、任务、模板及处理器放置于单独的目录，用于层次性、结构化地组织 playbook，通过 include 引入
-    https://www.wumingx.com/linux/ansible-roles.html
-    ```

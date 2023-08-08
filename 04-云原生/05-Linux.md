@@ -21,6 +21,10 @@ cat /proc/cpuinfo | grep name | cut -f2 -d: | uniq -c
 # 查看内存信息
 cat /proc/meminfo
 
+# 网卡绑定模式 
+# https://blog.csdn.net/wangzongyu/article/details/127097986
+cat /proc/net/bonding/Bond0 | grep -i bond
+
 # 如何查看操作系统
 cat /etc/redhat-release
 lsb_release -a
@@ -44,7 +48,7 @@ cat /proc/cpuinfo
 
 # 如何查看linux 系统内存大小的信息，可以查看总内存，剩余内存，可使用内存等信息  
 cat /proc/meminfo
-
+do
 # 查看是否HDD  rota=1 旋转=HDD
 lsblk -o name,rota
 grep ^ /sys/block/*/queue/rotational
@@ -80,7 +84,7 @@ grep ^ /sys/block/*/queue/rotational
   | ---- | ------------------------------------------------------- |
   | -a   | 显示所有进程（包括其他用户的进程）                      |
   | -u   | 用户以及其他详细信息                                    |
-  | -x   | 显示没有控制终端的进程                                  |
+  | -x   | 显示没有控制终端的进程zQ                                |
   | -e   | 此选项的效果和指定"-A"选项相同，显示所有程序。          |
   | -f   | 显示UID,PPIP,C与STIME栏位                               |
   | -L   | 显示线程及线程个数显示出来（LWP: light weight process） |
@@ -127,6 +131,14 @@ grep ^ /sys/block/*/queue/rotational
   > 第4行：物理内存总量、内存空闲量、内存使用量、作为内核缓存的内存量。
   >
   > 第5行：虚拟内存总量、虚拟内存空闲量、虚拟内存使用量、已被提前加载的内存量。
+
+  ``` shell
+  https://www.coonote.com/linux-note/linux-cpu-utilization-2.html
+  https://www.pianshen.com/article/1554466913/
+  top 1
+  ```
+
+  
 
 + **htop**：一个互动的进程查看器，可以动态观察系统进程状况
 
@@ -250,6 +262,32 @@ grep ^ /sys/block/*/queue/rotational
   | -u   | 表示操作哪个用户       |
   | -l   | 显示工作表内的定时任务 |
   | -e   | 编辑工作表             |
+  
++ **sysctl**
+
+  ``` shell
+  sysctl -a
+  # 持久修改
+  vi /etc/sysctl.conf
+  /sbin/sysctl -p
+  # 临时修改
+  /sbin/sysctl -w net.ipv4.route.flush=1
+  ```
+
++ **systemctl** 
+
+  **rc.local**
+
+  ``` shell 
+  source: /usr/lib/systemd/system/
+  enable: /etc/systemd/system/multi-user.target.wants/
+  
+  systemd vs rc.local
+  https://blog.csdn.net/haveqing/article/details/130343394
+  https://blog.csdn.net/soonfly/article/details/72876001
+  ```
+
+  
 
 ##### 文件操作
 
@@ -366,7 +404,7 @@ grep ^ /sys/block/*/queue/rotational
   A line 1
   A line 2
   End
-  # 示例
+  # 示例：统计存储资源之和
   kubectl get pv -A | grep storage-mixed | awk '{print $2}' | grep Ti | awk '{info=$1;gsub(/Ti/,"",info);print info}' | awk '{sum += $1} END{print sum}'
   ```
 
@@ -417,7 +455,7 @@ grep ^ /sys/block/*/queue/rotational
 
   ``` shell
   # p : 显示
-  # -n 仅显示script处理后的结果
+  # -n  仅显示script处理后的结果
   $ cat /etc/passwd | sed '5,7p' -n 
   $ cat /etc/passwd | sed '/root/p' -n  # 搜索并打印
   # s : 替换 
@@ -425,6 +463,8 @@ grep ^ /sys/block/*/queue/rotational
   # d : 删除
   $ cat /etc/passwd | sed '2d' 
   $ cat /etc/passwd | sed '/root/d' # 搜索并删除
+  # i : 新增
+  $ sed '$n i echo "--"' /etc/passwd
   ```
 
 + **touch**
@@ -436,6 +476,8 @@ grep ^ /sys/block/*/queue/rotational
   **mv**
 
   **rm**
+
++ **find -inum xxxx -delete**：删除乱码文件
 
 + **dd**：用于按照指定大小的数据块个数来复制文件或转换文件
 
@@ -457,6 +499,11 @@ grep ^ /sys/block/*/queue/rotational
   ```shell
   printf "Test awesome shareable disks" | sudo dd of=/dev/vdc bs=1 count=150 conv=notrunc
   sudo dd if=/dev/vdc bs=1 count=150 conv=notrunc
+  ```
+
+  ``` shell
+  # conv=fsync, oflag=sync/dsync 区别
+  https://blog.csdn.net/boyemachao/article/details/107858734
   ```
 
   
@@ -500,11 +547,11 @@ grep ^ /sys/block/*/queue/rotational
 
 ##### 输入输出
 
-> 标准输入重定向（STDIN，文件描述符为0）：默认从键盘输入，也可从其他文件或命令中输入。
+> 标准输入重定向（STDIN，文件描述符为0，&0）：默认从键盘输入，也可从其他文件或命令中输入。
 >
-> 标准输出重定向（STDOUT，文件描述符为1）：默认输出到屏幕。
+> 标准输出重定向（STDOUT，文件描述符为1，&1）：默认输出到屏幕。
 >
-> 错误输出重定向（STDERR，文件描述符为2）：默认输出到屏幕。
+> 错误输出重定向（STDERR，文件描述符为2，&2）：默认输出到屏幕。
 
 + 输入重定向（to memery）
 
@@ -529,12 +576,37 @@ grep ^ /sys/block/*/queue/rotational
   | 命令 >> 文件  | 将标准输出重定向到一个文件中（追加到原有内容的后面）         |
   | 命令 2>> 文件 | 将错误输出重定向到一个文件中（追加到原有内容的后面）         |
   | 命令 &>> 文件 | 将标准输出与错误输出共同写入到文件中（追加到原有内容的后面） |
+  | 2>&1          | &1 指的是文件描述符1，即将标准错误（2）输出到到标准输出（&1） |
+  
++ **rz**：上传文件
+
+  ``` shell
+  -b 以二进制方式，默认为文本方式
+  -e 对所有控制字符转义
+  ```
+
++ **sz**
+
+
+
+
+
+
 
 ##### 管道符
 
 **|：**把前一个命令原本要输出到屏幕的信息当作是后一个命令的标准输入
 
 **| xargs：**若管道后方的命令不接受标准输入作为参数，只接收命令行参数，则使用 xargs 进行转换
+
+``` shell
+# xargs 占位符 {}
+ls | xargs -t -I{} echo {}
+# -t ： 打印内容，去掉\n之后的字符串
+# -I :  后面定义占位符，上例子是{}  ，后面命令行中可以多次使用占位符
+```
+
+
 
 
 
@@ -651,12 +723,19 @@ grep ^ /sys/block/*/queue/rotational
 
   ``` shell
   for i in $(ls); do echo $i; done
+  
+  for sc in $(kubectl get sc | grep ceph-rbd | awk '{print $1}'); do kubectl annotate sc $sc nest-cluster-id="$(kubectl get sc $sc -o jsonpath='{.parameters.clusterID}')"; done
+  
+  ids=(0 1 2 3 4 5 6 7)
+  for sc in ${ids[*]}; do 
+  echo $sc;
+  done
   ```
 
 + **while**
 
   ```shell
-  while [ 1 == 1 ]; do echo "+"; done
+  while [ 1 == 1 ]; do echo "+" && sleep 1000; done
   ```
   
 + ```shell
@@ -736,6 +815,16 @@ grep ^ /sys/block/*/queue/rotational
   | ---- | ------------------------ |
   | -f   | 强制删除用户             |
   | -r   | 同时删除用户及用户家目录 |
+  
++ **ssh-keygen**
+
+  ``` shell
+  $ ssh-keygen  # 生成ssh秘钥
+  1. $ ssh-copy-id curve@10.192.100.1 
+  2. $ scp -p ~/.ssh/id_rsa.pub curve@10.192.100.1:/curve/.ssh/authorized_keys
+  ```
+
+  
 
 
 
@@ -811,6 +900,15 @@ grep ^ /sys/block/*/queue/rotational
 
 + **su** / **sudo -i**
 
+  ``` shell
+  su - user 是完全切换到另一个用户的身份，并加载该用户的环境设置，
+  su user 只是切换到另一个用户的身份，但不加载其环境设置。例如.bashrc或.profile
+  
+  /etc/sudoers
+  ```
+
+  
+
 ##### 目录结构
 
 | 目录名称    | 应放置文件的内容                                          |
@@ -867,19 +965,6 @@ grep ^ /sys/block/*/queue/rotational
   | -t   | 指定文件系统的类型                         |
 
 + **lsblk**
-
-+ **fdisk**：用于新建、修改及删除磁盘的分区表信息
-
-  | 参数 | 作用                   |
-  | ---- | ---------------------- |
-  | m    | 查看全部可用的参数     |
-  | n    | 添加新的分区           |
-  | d    | 删除某个分区信息       |
-  | l    | 列出所有可用的分区类型 |
-  | t    | 改变某个分区的类型     |
-  | p    | 查看分区表信息         |
-  | w    | 保存并退出             |
-  | q    | 不保存直接退出         |
 
 + **文件系统**
 
@@ -946,6 +1031,35 @@ grep ^ /sys/block/*/queue/rotational
     | -Q   | 查看摘要信息           |
     | -D   | 查看详细信息           |
     | -S   | 停止RAID磁盘阵列       |
+    
+  + **RAID写惩罚和IOPS计算**
+  
+    https://blog.csdn.net/lincoln_2012/article/details/51925373
+  
+    ```
+    由于RAID组需要校验以提供恢复功能，所以会存在一定写惩罚（一个业务写操作对应实际硬盘的I/O操作），这个系数如下：
+    RAID0: 1
+    RAID1: 2
+    RAID5: 4
+    RAID6: 6
+    RAID1-0: 2
+    所以RAID组IOPS = 硬盘写IOPS*硬盘数量*写操作百分比/写惩罚系数 + 硬盘读IOPS*硬盘数量*读操作百分比。 
+    以4块IOPS为180的SAS硬盘组RAID 6然后百分百随机写操作为例：IOPS = 180*4/6 = 120 
+    https://blog.csdn.net/eagle89/article/details/128938949
+    ```
+  
+    IOPS：是指硬盘每秒的读写次数
+  
+    IO时间（读写时间） = 磁头移动时间 + 磁盘转动时间 +数据处理时间
+  
+    IO时间（读写时间） = (磁头移动时间 + 60s/转速/2 + IOChunkSize/传输速度)
+  
+    eg：磁盘转速为10K，磁头移动时间为5ms，最大传输为40MB/S，在IO不同大小的情况下，IOPS如下
+  
+    | IO大小 | 磁盘转动时间  | 传输时延     | IO时间      | IOPS | 带宽            |
+    | ------ | ------------- | ------------ | ----------- | ---- | --------------- |
+    | 4K     | 60s/10000/2=3 | 4K/40MB=0.1  | 5+3+0.1=8.1 | 123  | 123*4K=492K/S   |
+    | 64K    | 60s/10000/2=3 | 64K/40MB=1.6 | 5+3+1.6=9.6 | 104  | 104*64K=6656K/S |
 
 
 
@@ -953,20 +1067,35 @@ grep ^ /sys/block/*/queue/rotational
 
   <img src="pictures/image-20210806093656026.png" alt="image-20210806093656026" style="zoom: 67%;" />
 
-  | 功能/命令 | 物理卷管理 | 卷组管理  | 逻辑卷管理 |
-  | --------- | ---------- | --------- | ---------- |
-  | 扫描      | pvscan     | vgscan    | lvscan     |
-  | 建立      | pvcreate   | vgcreate  | lvcreate   |
-  | 显示      | pvdisplay  | vgdisplay | lvdisplay  |
-  | 删除      | pvremove   | vgremove  | lvremove   |
-  | 扩展      |            | vgextend  | lvextend   |
-  | 缩小      |            | vgreduce  | lvreduce   |
+  ``` shell
+  # LVM恢复操作
+  https://www.cnblogs.com/zcyy/articles/16834848.html
+  https://blog.csdn.net/weixin_43700866/article/details/122235121
+  https://www.lxlinux.net/5008.html
+  
+  pvcreate /dev/sdb # 将物理磁盘初始化为物理卷 PV
+  vgcreate ceph /dev/sdb # 创建卷组 VG，并将 PV 加入 VG
+  lvcreate -n osd -L 10G ceph # 基于卷组 VG 创建逻辑卷 LV
+  lvcreate -n osd0 -l 33%vg ceph
+  mkfs.xfs /dev/ceph/osd # 格式化
+  mount /dev/ceph/osd /mnt # 挂载
+  df -h
+  pvcreate pvremove
+  vgcreate vgremove vgextend vgreduce
+  lvcreate lvremove
+  ```
+  
++ **fdisk**：用于新建、修改及删除磁盘的分区表信息
+
+  ``` shell
+  # 通过fdisk恢复分区
+  https://help.aliyun.com/document_detail/52046.html
+  ```
   
 + **parted**
 
   ```shell
   # https://www.cnblogs.com/LuLu-0904/p/16784733.html
-  
   [root@evm-4zgcg3kn0u80 ~]# parted /dev/vdc
   GNU Parted 3.1
   Using /dev/vdc
@@ -985,7 +1114,7 @@ grep ^ /sys/block/*/queue/rotational
   Start? 0%                                                                 
   End? 33%
   ```
-
+  
 + **udev**
 
   ``` shell
@@ -1013,6 +1142,128 @@ grep ^ /sys/block/*/queue/rotational
   EOF
   udevadm trigger
   udevadm control --reload
+  ```
+  
++ **multipath**
+
+  ``` shell
+  # https://www.51cto.com/article/600399.html
+  # detect multiple paths to devices
+  multipath
+  # -v3 print debug information 
+  # get wwid 
+  cat /etc/multipath/bindings 
+  # show multipath topology (maximum info)
+  multipath -ll
+  # show dm link
+  ls -lh /dev/mapper/ 
+  # flush all multipath device maps
+  multipath -F
+  # reload /etc/multipath.conf
+  systemctl reload multipathd 
+  ```
+
++ **iscsiadm**
+
+  ``` shell
+  # 发现
+  iscsiadm -m discovery -t st(sendtargets) -p 192.168.201.112 -d2    
+  iscsiadm -m discovery -t st(sendtargets) -p 192.168.201.111 -d2
+  
+  # 连接（先发现，再连接，不指定T和p时则从发现中连接）
+  iscsiadm -m node -T iqn.2014-09.com.accelstor.neosapphire:demo [-p 192.168.201.111] -l
+  # 断开连接
+  iscsiadm -m node -T iqn.2014-09.com.accelstor.neosapphire:demo -u
+  
+  # 
+  iscsiadm -m session -R
+  ```
+
++ **zfs**
+
+  ``` shell
+  # ZFS命令行大全
+  # https://blog.csdn.net/weixin_42293662/article/details/119707555
+  # https://blog.51cto.com/u_13935220/5102153
+  zfs list -t all -o name,origin,clones
+  zfs create zfs-pool/test
+  zfs snapshot zfs-pool/test@1
+  zfs rollback zfs-pool/test@1
+  
+  # https://serverfault.com/questions/849966/zfs-delete-snapshots-with-interdependencies-and-clones
+  # https://stackoverflow.com/questions/66925115/zfs-filesystem-has-dependent-clones
+  zfs clone zfs-pool/test@1 zfs-pool/test2
+  zfs send zfs-pool/test@1 | pv | zfs receive zfs-pool/test3
+  ```
+
++ **iostat**
+
+  ```shell
+  # https://bean-li.github.io/dive-into-iostat/
+  rrqm/s : 每秒合并读操作的次数
+  wrqm/s: 每秒合并写操作的次数
+  r/s ：每秒读操作的次数
+  w/s : 每秒写操作的次数
+  rMB/s :每秒读取的MB字节数
+  wMB/s: 每秒写入的MB字节数
+  avgrq-sz：每个IO的平均扇区数，即所有请求的平均大小，以扇区（512字节）为单位
+  avgqu-sz：平均为完成的IO请求数量，即平均意义上的请求队列长度
+  await：平均每个IO所需要的时间，包括在队列等待的时间，也包括磁盘控制器处理本次请求的有效时间。
+  r_wait：每个读操作平均所需要的时间，不仅包括硬盘设备读操作的时间，也包括在内核队列中的时间。
+  w_wait: 每个写操平均所需要的时间，不仅包括硬盘设备写操作的时间，也包括在队列中等待的时间。
+  svctm： 表面看是每个IO请求的服务时间，不包括等待时间。实际上，iostat工具没有任何一输出项表示的是硬盘设备平均每次IO的时间。
+  %util： 表面看是工作时间或者繁忙时间占总时间的百分比。实际上，iostat工具没有任何一输出项可以衡量磁盘设备的饱和度。
+  ```
+
++ **lspci**
+
+  ```shell
+  # 现代计算机系统因为高速设备和低速设备的运行任务的速度差异的问题，一般会有南北桥。
+  # 北桥是高速总线，就是CPU总线，内存总线等。
+  # 南桥芯片负责接入非高速的IO总线，IO总线有很多的具体总线，PCI总线，PCIE总线，IDE总线，SCSI总线等，这些总线的功能各不相同，
+  
+  # 0000:00:1f.1
+  # 第一个是域，第二个8位表示一个总线编号，第三个5位表示一个设备号，第四个3位表示功能号
+  
+  [root@cicd ~]# lspci
+  00:00.0 Host bridge: Intel Corporation 440BX/ZX/DX - 82443BX/ZX/DX Host bridge (AGP disabled) (rev 03)
+  00:07.0 ISA bridge: Intel Corporation 82371AB/EB/MB PIIX4 ISA (rev 01)
+  00:07.1 IDE interface: Intel Corporation 82371AB/EB/MB PIIX4 IDE (rev 01)
+  00:07.3 Bridge: Intel Corporation 82371AB/EB/MB PIIX4 ACPI (rev 02)
+  00:08.0 VGA compatible controller: Microsoft Corporation Hyper-V virtual VGA
+  # lspci 没有标明域，但对于一台PC而言，一般只有一个域，即0号域
+  # 在单个系统上，插入多个总线是通过桥（bridge)来完成的，桥是一种用来连接总线的特殊PCI外设。
+  # PCI系统的整体布局组织为树型
+  
+  # lspci -t
+  # 
+  # lspci -DDnnv
+  
+  
+  -n：以数字方式显示PCI厂商和设备代码；
+  -t：以树状结构显示PCI设备的层次关系，包括所有的总线、桥、设备以及它们之间的联接；
+  -b：以总线为中心的视图；
+  -d：仅显示给定厂商和设备的信息；
+  -s：仅显示指定总线、插槽上的设备和设备上的功能块信息；
+  -i：指定PCI编号列表文件，而不使用默认的文件；
+  -m：以机器可读方式显示PCI设备信息。
+  ```
+
++ **mount**
+
+  ``` shell
+  # Linux Bind Mount 和 Mount Propagation
+  https://blog.csdn.net/weixin_40864891/article/details/107330218
+  https://developer.aliyun.com/article/679919
+  https://medium.com/kokster/kubernetes-mount-propagation-5306c36a4a2d
+  
+  mount -l
+  /proc/self/mountinfo
+  ```
+
+  
+
+
 
 
 
@@ -1025,6 +1276,11 @@ grep ^ /sys/block/*/queue/rotational
   
   yum --showduplicates list <package name> | expand
   yum install <package name>-<version info>
+  
+  yum clean all
+  yum makecache
+  
+  yum -y install --downloadonly --downloaddir /tmp/ NetworkManager 
   ```
 
 + **rpm**
@@ -1108,7 +1364,7 @@ grep ^ /sys/block/*/queue/rotational
   vi Preamble.make
   modify to # CFLAGS += -pipe -Wno-format-security -D_DEFAULT_SOURCE=1
   autoconf # 只有configure.am或configure.in文件时，用autoconf命令来生成configure
-  cat .configure
+  cat configure
   
   cd /root
   tar zcvf ocfs2-tools-1.8.6.tar.gz ocfs2-tools-1.8.6/
@@ -1142,7 +1398,7 @@ grep ^ /sys/block/*/queue/rotational
 + **depmod**
 
   ```shell
-  depmod -a
+  depmod -ar
   # 我编译了一个新的wifi驱动r8192se_pci.ko，将其拷贝到/lib/modules/2.6.31-20-generic/wireless下，然后到/lib/modules/2.6.31-20-generic运行depmod -a，之后可以在任意目录运行modprobe r8192se_pci。
   cat modules.dep 
   ```
@@ -1167,7 +1423,7 @@ grep ^ /sys/block/*/queue/rotational
   # kernel dev
   yum install kernel-devel kernel-headers elfutils-libelf-devel 
   # gcc lib
-  yum install -y libuuid-devel libblkid-devel gcc bc zlib-devel openssl-devel ncurses-devel libaio-devel readline-devel glib2-devel
+  yum install -y libuuid-devel libblkid-devel gcc bc zlib-devel openssl-devel ncurses-devel libaio-devel readline-devel glib2-devel elfutils-libelf-devel 
   # dev tool
   yum group install "Compatibility Libraries" -y
   yum group install "Development Tools" -y
@@ -1380,6 +1636,23 @@ grep ^ /sys/block/*/queue/rotational
       
   }
   ```
+  
+  ```shell
+  # WebSocket
+  proxy_set_header Upgrade $http_upgrade;
+  proxy_set_header Connection "upgrade";
+  proxy_http_version 1.1;
+  
+  # SSE
+  proxy_set_header Upgrade $http_upgrade;
+  proxy_set_header Connection "upgrade";
+  proxy_http_version 1.1;
+  proxy_set_header Connection;
+  chunked_transfer_encoding off;
+  proxy_cache off;
+  ```
+  
+  
 
 ##### 网络管理
 
@@ -1457,6 +1730,10 @@ grep ^ /sys/block/*/queue/rotational
 
 + **firewall-cmd**
 
+  ``` shell
+  firewalld 是一个动态防火墙管理器，它提供了更高级和灵活的功能。firewalld 使用 iptables 作为其底层实现，但它采用了一种不同的方法来管理规则。firewalld 允许管理员在运行时动态添加、删除和修改防火墙规则，而无需重新加载整个规则集。这使得配置更加方便和灵活。
+  ```
+  
   **区域（zone）**：针对特定位置或场景（例如家庭、公共、受信任等）可能具有的各种信任级别的规则集。即每个zone里面有不同的iptables规则。
   
   ```shell
@@ -1503,6 +1780,7 @@ grep ^ /sys/block/*/queue/rotational
 + **tcpdump**
 
   ```shell
+  # https://www.cnblogs.com/wongbingming/p/13212306.html
   -i any
   ```
 
@@ -1576,3 +1854,126 @@ https://xixiliguo.github.io/linux/cloud-init.html
 https://blog.csdn.net/nanhai_happy/article/details/125148888
 
 https://access.redhat.com/documentation/zh-cn/red_hat_enterprise_linux/8/html/configuring_and_managing_cloud-init_for_rhel_8/introduction-to-cloud-init_cloud-content
+
+
+
+##### container
+
+**namespace**：**为了隔离不同类型的资源视图**，Linux内核里面实现了以下几种不同类型的namespace
+
+- UTS，表示不同的namespace可以配置不同的hostname。
+- User，表示不同的namespace可以配置不同的用户和组。
+- Mount，表示不同的namespace的文件系统挂载点是隔离的
+- PID，表示不同的namespace有完全独立的pid，也即一个namespace的进程和另一个namespace的进程，pid可以是一样的，但是代表不同的进程。
+- Network，表示不同的namespace有独立的网络协议栈。
+
+1. 查看运行的docker容器
+
+   ```
+   # docker ps
+   CONTAINER ID        IMAGE               COMMAND                         PORTS               
+   f604f0e34bc2        testnginx:1         "/bin/sh -c 'nginx -…"          0.0.0.0:8081->80/tcp  
+   ```
+
+2. 查看容器entrypoint对应的进程号
+
+   ```shell
+   # docker inspect f604f0e34bc2
+   Pid: 58212,
+   ```
+
+3. 查看宿主机nginx进程，可以看到master和worker，worker的父进程是master
+
+   ``` shell
+   # ps -ef |grep nginx
+   root     58212 58195  0 01:43 ?        00:00:00 /bin/sh -c nginx -g "daemon off;"
+   root     58244 58212  0 01:43 ?        00:00:00 nginx: master process nginx -g daemon off;
+   ```
+
+4. 在/proc/pid/ns里查看两个进程的ns，可以看到它们都属于相同的ns
+
+   ``` shell
+   # ls -l /proc/58212/ns 
+   lrwxrwxrwx 1 root root 0 Jul 16 19:19 ipc -> ipc:[4026532278]
+   lrwxrwxrwx 1 root root 0 Jul 16 19:19 mnt -> mnt:[4026532276]
+   lrwxrwxrwx 1 root root 0 Jul 16 01:43 net -> net:[4026532281]
+   lrwxrwxrwx 1 root root 0 Jul 16 19:19 pid -> pid:[4026532279]
+   lrwxrwxrwx 1 root root 0 Jul 16 19:19 user -> user:[4026531837]
+   lrwxrwxrwx 1 root root 0 Jul 16 19:19 uts -> uts:[4026532277]
+   
+   # ls -l /proc/58253/ns 
+   lrwxrwxrwx 1 33 tape 0 Jul 16 19:20 ipc -> ipc:[4026532278]
+   lrwxrwxrwx 1 33 tape 0 Jul 16 19:20 mnt -> mnt:[4026532276]
+   lrwxrwxrwx 1 33 tape 0 Jul 16 19:20 net -> net:[4026532281]
+   lrwxrwxrwx 1 33 tape 0 Jul 16 19:20 pid -> pid:[4026532279]
+   lrwxrwxrwx 1 33 tape 0 Jul 16 19:20 user -> user:[4026531837]
+   lrwxrwxrwx 1 33 tape 0 Jul 16 19:20 uts -> uts:[4026532277]
+   ```
+
+5. 指令**nsenter**，可以用来运行一个进程，进入指定的namespace
+
+   例如，通过下面的命令，我们可以运行/bin/bash，并且进入nginx所在容器的namespace，可以查看该ns下的IP、进程等信息
+
+   ``` shell
+   # nsenter --target 58212 --mount --uts --ipc --net --pid -- /bin/bash
+   root@f604f0e34bc2:/# ip addr
+   1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000
+       link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+       inet 127.0.0.1/8 scope host lo
+          valid_lft forever preferred_lft forever
+   23: eth0@if24: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP group default 
+       link/ether 02:42:ac:11:00:03 brd ff:ff:ff:ff:ff:ff
+       inet 172.17.0.3/16 brd 172.17.255.255 scope global eth0
+          valid_lft forever preferred_lft forever
+   ```
+
+6. 指令**unshare**，会离开当前的namespace，创建且加入新的namespace，然后执行参数中指定的命令
+
+   例如，运行下面这行命令之后，pid和net都进入了新的namespace，看不到宿主机上其它ns下的IP地址和网卡、进程等信息
+
+   ``` shell
+   # unshare --mount --ipc --pid --net --mount-proc=/proc --fork /bin/bash
+   # ip addr
+   1: lo: <LOOPBACK> mtu 65536 qdisc noop state DOWN group default qlen 1000
+       link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+   # ps aux
+   USER       PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND
+   root         1  0.0  0.0 115568  2136 pts/0    S    22:55   0:00 /bin/bash
+   root        13  0.0  0.0 155360  1872 pts/0    R+   22:55   0:00 ps aux
+   ```
+
+7. 逃逸
+
+   ``` yaml
+       spec:
+         hostNetwork: true
+         hostPID: true
+         initContainers:
+         - name: init
+           image: harbor.ctyuncdn.cn/ecf/alpine:latest
+           imagePullPolicy: "IfNotPresent"
+           securityContext:
+             privileged: true
+           command:
+             - nsenter
+             - --mount=/proc/1/ns/mnt
+             - --
+             - bash
+             - -c
+             - ls -lh /root/
+   ```
+   
+
+
+##### debug
+
++ cache on-load
++ sql deadlock
++ 磁盘吞吐上不去，光衰
++ 路由到核心交换机，没走接入交换机
++ /lib /liblocal
+
+
+
+
+
