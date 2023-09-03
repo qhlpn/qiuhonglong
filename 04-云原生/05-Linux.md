@@ -27,6 +27,7 @@ cat /proc/net/bonding/Bond0 | grep -i bond
 
 # 如何查看操作系统
 cat /etc/redhat-release
+cat /etc/os-release
 lsb_release -a
 cat  /etc/issue
 
@@ -52,6 +53,10 @@ do
 # 查看是否HDD  rota=1 旋转=HDD
 lsblk -o name,rota
 grep ^ /sys/block/*/queue/rotational
+
+# 查看带外地址 
+# https://blog.csdn.net/qq_38120778/article/details/126097810
+ipmitool lan print | grep 'IP Address'
 ```
 
 
@@ -460,6 +465,7 @@ grep ^ /sys/block/*/queue/rotational
   $ cat /etc/passwd | sed '/root/p' -n  # 搜索并打印
   # s : 替换 
   $ echo "hello world" | sed 's/world/timi/gi' # 搜索并替换 sed 's/要被取代的字串/新的字串/gi' g全局 i忽略大小写
+  $ sed -i 's/100.94.88.60/192.168.211.204/gi' /etc/containers/registries.conf # -i 在原始文件中替换
   # d : 删除
   $ cat /etc/passwd | sed '2d' 
   $ cat /etc/passwd | sed '/root/d' # 搜索并删除
@@ -1257,13 +1263,31 @@ ls | xargs -t -I{} echo {}
   https://developer.aliyun.com/article/679919
   https://medium.com/kokster/kubernetes-mount-propagation-5306c36a4a2d
   
+  mount --bind
   mount -l
   /proc/self/mountinfo
   ```
 
++ **nfs**
+
+  ``` shell
+  # 查看存储系统提供的NFS共享
+  showmount -e 172.16.128.10
+  # 挂载NFS共享
+  mount -t nfs -o vers=3,proto=tcp,rsize=1048576,wsize=1048576,hard,intr,timeo=50 172.16.128.10:/nfstest /nfs
   
+  vers: 	为NFS协议版本，根据实际情况n选择3或4
+  NFS:  	v4共享协议在单控切换时可能导致业务中断，故在高可靠性环境中推荐使用NFS v3。
+  proto: 	为传输协议方式，根据实际情况选择tcp或udp。
+  rsize:	为读时传输块大小，单位为字节，推荐为“1048576”，Redhat 7推荐为“16384”。
+  wsize:	为写时传输块大小，单位为字节，推荐为“1048576”。
+  timeo:	为超时重传时间，单位为十分之一秒，推荐为“600”。
+  
+  # fstab自动挂载
+  172.16.128.10:/nfstest /nfs nfs vers=3,proto=tcp,rsize=1048576,wsize=1048576,hard,intr,timeo=50,defaults,_netdev 0 0
+  ```
 
-
++ **growpart**
 
 
 
@@ -1841,8 +1865,9 @@ ls | xargs -t -I{} echo {}
   ``` shell
   ip route add  0.0.0.0/0 via 192.168.2.1 dev eth0
   ip route
+  ip link set eth0 up  # ifconfig eth0 up
   ```
-
+  
   
 
 ##### cloud-init
@@ -1963,6 +1988,56 @@ https://access.redhat.com/documentation/zh-cn/red_hat_enterprise_linux/8/html/co
              - ls -lh /root/
    ```
    
+
+##### kvm
+
+``` xml
+<!-- arm64 -->
+<domain type='kvm'>
+  <name>sample</name>
+  <memory unit='GiB'>2</memory>
+  <vcpu placement='static'>1</vcpu>
+  <os>
+    <type arch='aarch64' machine='virt-4.1'>hvm</type>
+    <loader readonly='yes' type='pflash'>/usr/share/edk2/aarch64/QEMU_EFI-pflash.raw</loader>
+    <nvram>/var/lib/libvirt/qemu/nvram/sample_VARS.fd</nvram>
+    <boot dev='hd'/>
+  </os>
+  <cpu mode='host-passthrough' check='none'/>
+  <devices>
+    <emulator>/usr/libexec/qemu-kvm</emulator>
+    <disk type='file' device='disk'>
+      <driver name='qemu' type='qcow2'/>
+      <source file='/ocfs2/1T/kvm/union-1050e.qcow2'/> 
+      <target dev='vda' bus='virtio'/>
+    </disk>
+    <interface type='network'>
+      <source network='default'/>
+      <model type='virtio'/>
+    </interface>
+    <graphics type='vnc' port='26912' autoport='no' listen='0.0.0.0'>     
+      <listen type='address' address='0.0.0.0'/>      
+    </graphics>
+    <console type='pty'>
+      <target type='serial' port='0'/>
+    </console>
+    <serial type='pty'>
+      <target port='0'/>
+    </serial>
+  </devices>
+</domain>
+```
+
+``` shell
+virsh define -f sample.xml
+virsh start sample
+virsh destroy sample
+virsh undefine sample
+qemu-img create -f raw disk.img 10G   
+```
+
+
+
 
 
 ##### debug
