@@ -1995,14 +1995,16 @@ https://mp.weixin.qq.com/s/jpopq16BOA_vrnLmejwEdQ
 
 + **Provisioning and Deleting：**实现与外部存储供应商协调卷的创建/删除处理，即 CreateVolume 和 DeleteVolume。如执行 rbd create / rbd rm 
 
-+ **Attaching and Detaching：**实现将外部存储供应商提供好的卷设备挂载到本地或者从本地卸载，即 ControllerPublishVolume 和 ControllerUnpublishVolume。 如执行 rbd device map / rbd device unmap
++ **Attaching and Detaching：**实现在Attach阶段（在mount阶段之前）做准备工作，即 ControllerPublishVolume 和 ControllerUnpublishVolume。
 
 + **Mount and Umount：**实现将存储挂载到Pod容器或者从Pod解挂，即 NodeStageVolume、NodePublishVolume 等。
+
+  如执行 rbd device map / rbd device unmap
 
   可以实现一个 PV 挂载在多个 pod 中使用
 
   NodeStageVolume 就是先 mount 到一个 globalmount 目录（/var/lib/kubelet/plugins/kubernetes.io/csi/pv/pvc-bcfe33ed-e822-4b0e-954a-0f5c0468525e/globalmount）
-
+  
   NodePublishVolume 再通过 mount bind 到 pod 的目录（/var/lib/kubelet/pods/xxx/volumes/kubernetes.io-csi/pvc-bcfe33ed-e822-4b0e-954a-0f5c0468525e/mount/hello-world）
 
 

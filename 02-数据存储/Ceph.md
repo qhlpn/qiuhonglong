@@ -436,10 +436,10 @@ ansible-playbook site.yml
 + **rgw**
 
     ``` shell
-    mkdir – p /var/lib/ceph/radosgw/ceph-rgw.`hostname`
+    mkdir -p /var/lib/ceph/radosgw/ceph-rgw.`hostname`
     
     ceph auth get-or-create client.rgw.`hostname` osd "allow rwx" mon "allow rw"
-    ceph auth get client.rgw.`hostname` | tee /var/lib/ceph/radosgw/ceph-rgw.{hostname}/keyring
+    ceph auth get client.rgw.`hostname` | tee /var/lib/ceph/radosgw/ceph-rgw.`hostname`/keyring
     
     chown -R ceph:ceph /var/lib/ceph/radosgw/ceph-rgw.`hostname`
     
@@ -811,6 +811,7 @@ osd_heartbeat_interval = 5
   rbd device ls
   
   rbd --id admin -m 192.168.211.35:6789,192.168.211.36:6789,192.168.211.37:6789 --keyfile=/tmp/csi/keys/keyfile-692396551 map istack-test/csi-vol-ce42da0f-8b42-11ed-ae4c-0000007c4c28 --device-type krbd --options noudev
+  --id admin --key AQC76f*************wOMkbQ== -m 192.168.201.1:6789,192.168.201.2:6789,192.168.201.3:6789
   ```
 
 + 磁盘逻辑卷操作
@@ -1476,12 +1477,12 @@ guest/host 两重 page cache 会对数据重复保存，带来内存浪费，最
 
 guest page cache，看起来它主要是作为读缓存，而对于写，没有一种模式是以写入它作为写入结束标志的
 
-| 缓存模式           | 说明                                                         | GUEST OS Page cache | Host OS Page cache | Disk write cache | 被认为数据写入成功 | 数据安全性                                                   |
-| ------------------ | ------------------------------------------------------------ | ------------------- | ------------------ | ---------------- | ------------------ | ------------------------------------------------------------ |
-| cache = unsafe     | 跟 writeback 类似，只是会忽略 GUEST OS 的 flush 操作，完全由 HOST OS 控制 flush | Bypass（？不确定）  | Enter              | Enter            | Host page cache    | 最不安全，只有在特定的场合才会使用                           |
-| Cache=writeback    | I/O 写到 HOST OS Page cache 就算成功，支持 GUEST OS flush 操作。 效率最快，但是也最不安全 | Bypass（？不确定）  | Enter              | Enter            | Host Page Cache    | 不安全. （only for temporary data where potential data loss is not a concern ） |
-| Cache=none         | 客户机的I/O 不会被缓存到 page cache，而是会放在 disk write cache。这种模式对写效率比较好，因为是写到 disk cache，但是读效率不高，因为没有放到 page cache。因此，可以在大 I/O 写需求时使用这种模式。 综合考虑下，基本上这是最优模式，而且是支持实时迁移的唯一模式也就是常说的 O_DIRECT I/O 模式 | Bypass              | Bypass             | Enter            | Disk write cache   | 不安全. 如果要保证安全的话，需要disk cache备份电池或者电容，或者使用 fync |
-| Cache=writethrough | I/O 数据会被同步写入 Host Page cache 和 disk。相当于每写一次，就会 flush 一次，将 page cache 中的数据写入持久存储。这种模式，会将数据放入 Page cache，因此便于将来的读；而绕过 disk write cache，会导致写效率较低。因此，这是较慢的模式，适合于写I/O不大，但是读I/O相对较大的情况，最好是用在小规模的有低 I/O 需求客户机的场景中。 当不需要支持实时迁移时，如果不支持writeback 则可用。也就是常说的 O_SYNC I/O 模式 | Enter               | Enter              | Bypass           | disk               | 安全                                                         |
+| 缓存模式            | 说明                                                         | GUEST OS Page cache | Host OS Page cache | Disk write cache | 被认为数据写入成功 | 数据安全性                                                   |
+| ------------------- | ------------------------------------------------------------ | ------------------- | ------------------ | ---------------- | ------------------ | ------------------------------------------------------------ |
+| cache = unsafe      | 跟 writeback 类似，只是会忽略 GUEST OS 的 flush 操作，完全由 HOST OS 控制 flush | Bypass（？不确定）  | Enter              | Enter            | Host page cache    | 最不安全，只有在特定的场合才会使用                           |
+| Cache=writeback     | I/O 写到 HOST OS Page cache 就算成功，支持 GUEST OS flush 操作。 效率最快，但是也最不安全 | Bypass（？不确定）  | Enter              | Enter            | Host Page Cache    | 不安全. （only for temporary data where potential data loss is not a concern ） |
+| Cache=none          | 客户机的I/O 不会被缓存到 page cache，而是会放在 disk write cache。这种模式对写效率比较好，因为是写到 disk cache，但是读效率不高，因为没有放到 page cache。因此，可以在大 I/O 写需求时使用这种模式。 综合考虑下，基本上这是最优模式，而且是支持实时迁移的唯一模式也就是常说的 O_DIRECT I/O 模式 | Bypass              | Bypass             | Enter            | Disk write cache   | 不安全. 如果要保证安全的话，需要disk cache备份电池或者电容，或者使用 fync |
+| Cache=writethrought | I/O 数据会被同步写入 Host Page cache 和 disk。相当于每写一次，就会 flush 一次，将 page cache 中的数据写入持久存储。这种模式，会将数据放入 Page cache，因此便于将来的读；而绕过 disk write cache，会导致写效率较低。因此，这是较慢的模式，适合于写I/O不大，但是读I/O相对较大的情况，最好是用在小规模的有低 I/O 需求客户机的场景中。 当不需要支持实时迁移时，如果不支持writeback 则可用。也就是常说的 O_SYNC I/O 模式 | Enter               | Enter              | Bypass           | disk               | 安全                                                         |
 
 
 

@@ -681,6 +681,9 @@ ls | xargs -t -I{} echo {}
 
 ##### Shell
 
+> sh 是 bash 的一种特殊的模式，sh 就是开启了 POSIX 标准的 bash， /bin/sh 相当于 /bin/bash --posix
+> sh 遵循 POSIX 规范：当某行代码出错时，不继续往下解释；bash 就算出错，也会继续向下执行
+
 + ``` shell
   #!/bin/bash
   echo $0 # 文件名
@@ -699,6 +702,7 @@ ls | xargs -t -I{} echo {}
 + **数组**
 
   ``` shell
+  ARRAY=()
   ARRAY=(VALUE0 VALUE1 VALUE2 VALUE3)
   ARRAY[0]=VALUE0
   ARRAY[1]=VALUE1
@@ -744,7 +748,7 @@ ls | xargs -t -I{} echo {}
   while [ 1 == 1 ]; do echo "+" && sleep 1000; done
   ```
   
-+ ```shell
+  ```shell
   #!/bin/bash
   pools=$(ceph osd lspools | awk '{print $2}')
   echo "${pools}" | while read pool
@@ -765,7 +769,24 @@ ls | xargs -t -I{} echo {}
       done
   done
   ```
-
+  
+  ``` shell
+  #!/bin/bash
+  arrNameBegin=()
+  arrIOBegin=()
+  while read line
+  do
+      diskIdx=$(echo ${line} | awk '{print $2}')
+      diskName=$(echo ${line} | awk '{print $3}')
+      diskIO=$(echo ${line} | awk '{print $13}')
+      arrNameBegin[$diskIdx]=${diskName}
+      arrIOBegin[$diskIdx]=${diskIO}
+      echo -------${diskIdx} ${diskName} ${diskIO}-----------
+  done < /proc/diskstats
+  
+  # while read line < file
+  ```
+  
   
 
 ##### 用户管理
@@ -1181,7 +1202,12 @@ ls | xargs -t -I{} echo {}
   # 断开连接
   iscsiadm -m node -T iqn.2014-09.com.accelstor.neosapphire:demo -u
   
-  # 
+  # 查看发现记录
+  iscsiadm -m node
+  # 查看发现连接
+  iscsiadm -m session
+  
+  # 重新刷新连接
   iscsiadm -m session -R
   ```
 
@@ -1206,6 +1232,7 @@ ls | xargs -t -I{} echo {}
 
   ```shell
   # https://bean-li.github.io/dive-into-iostat/
+  # https://blog.csdn.net/MrSate/article/details/104421383
   rrqm/s : 每秒合并读操作的次数
   wrqm/s: 每秒合并写操作的次数
   r/s ：每秒读操作的次数
@@ -1262,6 +1289,7 @@ ls | xargs -t -I{} echo {}
   https://blog.csdn.net/weixin_40864891/article/details/107330218
   https://developer.aliyun.com/article/679919
   https://medium.com/kokster/kubernetes-mount-propagation-5306c36a4a2d
+  https://cloud.tencent.com/developer/article/1842267
   
   mount --bind
   mount -l
@@ -1275,19 +1303,32 @@ ls | xargs -t -I{} echo {}
   showmount -e 172.16.128.10
   # 挂载NFS共享
   mount -t nfs -o vers=3,proto=tcp,rsize=1048576,wsize=1048576,hard,intr,timeo=50 172.16.128.10:/nfstest /nfs
+  # fstab自动挂载
+  172.16.128.10:/nfstest /nfs nfs vers=3,proto=tcp,rsize=1048576,wsize=1048576,hard,intr,timeo=50,defaults,_netdev 0 0
   
+  # https://bbs.huaweicloud.com/blogs/114222
   vers: 	为NFS协议版本，根据实际情况n选择3或4
   NFS:  	v4共享协议在单控切换时可能导致业务中断，故在高可靠性环境中推荐使用NFS v3。
   proto: 	为传输协议方式，根据实际情况选择tcp或udp。
   rsize:	为读时传输块大小，单位为字节，推荐为“1048576”，Redhat 7推荐为“16384”。
   wsize:	为写时传输块大小，单位为字节，推荐为“1048576”。
   timeo:	为超时重传时间，单位为十分之一秒，推荐为“600”。
+  ac/noac: 设置是否缓存文件属性
   
-  # fstab自动挂载
-  172.16.128.10:/nfstest /nfs nfs vers=3,proto=tcp,rsize=1048576,wsize=1048576,hard,intr,timeo=50,defaults,_netdev 0 0
+  # NFS并发读写场景：文件锁 + 关闭缓存
+  # https://developer.aliyun.com/article/1133911
+  # https://cloud.tencent.com/developer/news/397219
+  fcntl()保证并行IO操作的正确性，noac选项关掉缓存
   ```
 
-+ **growpart**
++ **growpart** 扩容分区
+
+  ``` shell
+  growpart /dev/vda 1
+  xfs_growfs /dev/vda1
+  ```
+
+  
 
 
 
@@ -1780,7 +1821,6 @@ ls | xargs -t -I{} echo {}
   
   ```shell
   # /etc/firewalld/zones 正使用的zone配置文件
-  # firewall-cmd --reload 重载配置
   
   # firewall-cmd --get-active-zones 查看所有正使用的zone
   # firewall-cmd --get-zone-of-interface=ens33  查询网卡所在zone
@@ -1794,6 +1834,11 @@ ls | xargs -t -I{} echo {}
   # firewall-cmd --permanent --zone=public --add-service=https   添加service
   
   # firewall-cmd --permanent --zone=trusted --add-source=1.1.0.0/16  添加信任的源
+  
+  # firewall-cmd --permanent --add-port=32080 添加端口
+  # firewall-cmd --list-ports
+  
+  # firewall-cmd --reload 重载配置生效
   ```
   
   ```
@@ -2033,7 +2078,7 @@ virsh define -f sample.xml
 virsh start sample
 virsh destroy sample
 virsh undefine sample
-qemu-img create -f raw disk.img 10G   
+qemu-img create -f raw disk.img 10G
 ```
 
 
