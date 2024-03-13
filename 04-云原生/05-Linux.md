@@ -57,6 +57,10 @@ grep ^ /sys/block/*/queue/rotational
 # 查看带外地址 
 # https://blog.csdn.net/qq_38120778/article/details/126097810
 ipmitool lan print | grep 'IP Address'
+
+javaws.exe *.jnlp  # 打开
+javacpl.exe # java 控制面板，配置白名单站点
+
 ```
 
 
@@ -83,7 +87,7 @@ ipmitool lan print | grep 'IP Address'
 
 + **ps**
 
-  **pstree**
+  **pstree**：可以查到线程
 
   | 参数 | 作用                                                    |
   | ---- | ------------------------------------------------------- |
@@ -99,6 +103,7 @@ ipmitool lan print | grep 'IP Address'
   ps -ef
   ps aux -L
   ps -efL
+  ps -fL -p 56020 | wc -l
   ```
 
   > **R（运行）：**进程正在运行或在运行队列中等待。
@@ -141,9 +146,12 @@ ipmitool lan print | grep 'IP Address'
   https://www.coonote.com/linux-note/linux-cpu-utilization-2.html
   https://www.pianshen.com/article/1554466913/
   top 1
+  top -H -p pid 查看进程下的线程数
+  top -b -n 1 -d 3 > file 
+  # -b ：batch模式，可以重定向到文件中
+  # -n 1：共取1次top数据
+  # -d 3：每次top时间间隔是3秒钟
   ```
-
-  
 
 + **htop**：一个互动的进程查看器，可以动态观察系统进程状况
 
@@ -290,9 +298,45 @@ ipmitool lan print | grep 'IP Address'
   systemd vs rc.local
   https://blog.csdn.net/haveqing/article/details/130343394
   https://blog.csdn.net/soonfly/article/details/72876001
+  
+  systemctl list-unit-files  # 列出所有单元
+  systemctl list-units       # 列出所有运行中单元
+  ```
+
++ **journalctl**
+
+  ``` shell
+  journalctl --since "2 hours ago" --until "1 hour ago"
+  journalctl --since "2021-11-01 00:00:00" --until "2021-11-02 00:00:00"
+  journalctl -f -u demo.service # 滚动实时查看最新日志
+  journalctl -n 100 -u demo.service # 查看当前最新100条日志
+  ```
+
++ **lsof**  查看打开的文件描述符
+
+  ``` shell
+  # ls open file
+  lsof abc.txt 显示开启文件abc.txt的进程
+  lsof 目录名 查找谁在使用文件目录系统
+  lsof -i :22 知道22端口被哪个进程占用
+  lsof -c abc 显示abc进程现在打开的文件
+  lsof -g gid 显示归属gid的进程情况
+  lsof -p 12 看进程号为12的进程打开了哪些文件
+  lsof -u username 查看用户打开哪些文件
+  ```
+
++ **localectl** 设置语言环境变量命令
+
+  ``` shell
+  echo $LANG # 查看当前语言
+  locale -a # 查看支持的语言  zh_CN.xx en_US.xx
+  localectl set-locale LANG=zh_CN.xx
+  # 另起会话，echo $LANG 可以看到语言已更新
   ```
 
   
+
+
 
 ##### 文件操作
 
@@ -338,6 +382,10 @@ ipmitool lan print | grep 'IP Address'
   shift+i		插入模式
   			输入内容
   esc			两次
+  
+  :set number 显示行号
+  :set nowrap 不换行
+  :set wrap   换行
   ```
 
   
@@ -459,13 +507,15 @@ ipmitool lan print | grep 'IP Address'
 + **sed**： 查找模式匹配的行，执行后面的字符串操作
 
   ``` shell
-  # p : 显示
   # -n  仅显示script处理后的结果
+  # -i  直接在文件中修改  sed -i '/ocfs2/d' /etc/fstab
+  # p : 显示
   $ cat /etc/passwd | sed '5,7p' -n 
   $ cat /etc/passwd | sed '/root/p' -n  # 搜索并打印
   # s : 替换 
   $ echo "hello world" | sed 's/world/timi/gi' # 搜索并替换 sed 's/要被取代的字串/新的字串/gi' g全局 i忽略大小写
   $ sed -i 's/100.94.88.60/192.168.211.204/gi' /etc/containers/registries.conf # -i 在原始文件中替换
+  $ sed '/exporters/s/\.2\./\.1\./g' sc.yaml # 匹配查询某一行并替换该行的字符
   # d : 删除
   $ cat /etc/passwd | sed '2d' 
   $ cat /etc/passwd | sed '/root/d' # 搜索并删除
@@ -483,7 +533,7 @@ ipmitool lan print | grep 'IP Address'
 
   **rm**
 
-+ **find -inum xxxx -delete**：删除乱码文件
++ **find -inum xxxx -delete**：删除乱码文件   ls -i
 
 + **dd**：用于按照指定大小的数据块个数来复制文件或转换文件
 
@@ -531,7 +581,7 @@ ipmitool lan print | grep 'IP Address'
   | -v   | 显示压缩或解压的过程   |
   | -f   | 目标文件名             |
   | -p   | 保留原始的权限与属性   |
-  | -P   | 使用绝对路径来压缩     |
+  | -P   | 使用绝对路径来压缩sec  |
   | -C   | 指定解压到的目录       |
 
 + **ln**：用于创建文件的软硬链接
@@ -591,7 +641,15 @@ ipmitool lan print | grep 'IP Address'
   -e 对所有控制字符转义
   ```
 
-+ **sz**
++ **sz**：下载文件
+
++ **jq**： json处理器
+
+  ```shell
+  curl http://10.43.195.32:9090/prometheus/api/v1/rules | jq '.data.groups[] | select(.name == "nat")'
+  ```
+
+  
 
 
 
@@ -684,6 +742,11 @@ ls | xargs -t -I{} echo {}
 > sh 是 bash 的一种特殊的模式，sh 就是开启了 POSIX 标准的 bash， /bin/sh 相当于 /bin/bash --posix
 > sh 遵循 POSIX 规范：当某行代码出错时，不继续往下解释；bash 就算出错，也会继续向下执行
 
++ ``` shell
+  bash -c command # 命令行
+  bash .sh  		# 脚本文件
+  ```
+  
 + ``` shell
   #!/bin/bash
   echo $0 # 文件名
@@ -982,7 +1045,12 @@ ls | xargs -t -I{} echo {}
 
 主分区、扩展分区、逻辑分区：3个主分区加1个扩展分区，在扩展分区中创建出数个逻辑分区，满足多分区（大于4个）的需求。
 
-+ **blkid**
++ **blkid**：查看磁盘文件系统UUID
+
+  ```shell
+  # blkid /dev/mapper/mpatha
+  /dev/mapper/mpatha: LABEL="ocfs2-disk" UUID="a765546e-2c2a-45a8-9997-e1b74d4dc0c6" TYPE="ocfs2" 
+  ```
 
 + **mount** / **umount**
 
@@ -1038,7 +1106,7 @@ ls | xargs -t -I{} echo {}
 
   + RAID 10 vs RAID 5：鉴于RAID 5技术是因为硬盘设备的成本问题对读写速度和数据的安全性能而有了一定的妥协，但是大部分企业更在乎的是数据本身的价值而非硬盘价格，在不考虑成本的情况下RAID 10的性能都超过了RAID 5，因此生产环境中主要使用RAID 10技术。
 
-  + RAID 10 vs RAID 01：RAID 10级别中任何一块硬盘损坏都不会影响到数据安全性，其余硬盘均会正常运作。但RAID 01只要有任何一块盘损坏，最低级别的RAID 0硬盘组马上会停止运作。
+  + RAID 10 vs RAID 01：RAID1是镜象，RAID0是条带。RAID0的条带数据损坏将导致整个RAID损坏。以4块盘为例，A盘坏了，RAID10可以允许坏C或D，存活率2/3；RAID01只能允许坏B，存活率1/3
 
   + **mdadm**：用于创建、调整、监控和管理RAID设备
 
@@ -1090,6 +1158,18 @@ ls | xargs -t -I{} echo {}
 
 
 
++ **EC纠删码**
+
+  ``` shell
+  N+M:b，空间利用率为N/(N+M)
+  N: 数据对象个数,切片分段后的原始数据
+  M: 校验对象个数,冗余数据,允许故障的磁盘数
+  b: 决定数据对象在节点如何分布,允许故障的节点数
+  允许任意同时故障的磁盘数为M, 或允许任意同时故障的节点数为b
+  ```
+  
+  
+  
 + **逻辑卷管理**
 
   <img src="pictures/image-20210806093656026.png" alt="image-20210806093656026" style="zoom: 67%;" />
@@ -1188,6 +1268,11 @@ ls | xargs -t -I{} echo {}
   multipath -F
   # reload /etc/multipath.conf
   systemctl reload multipathd 
+  
+  # wwids    记录 multipath 软件识别过的 sd 盘，后续重新挂载时会直接纳管
+  # bindings 记录 wwid 对应的 mpath 设备号
+  
+  # lsblk -rn -o NAME,KNAME,PKNAME,HCTL,TYPE,TRAN,SIZE /dev/disk/by-path/ip-192.168.202.51:3260-iscsi-iqn.2006-08.com.huawei:oceanstor:2100f4fbb8e674eb::20001:192.168.202.51-lun-3
   ```
 
 + **iscsiadm**
@@ -1209,18 +1294,41 @@ ls | xargs -t -I{} echo {}
   
   # 重新刷新连接
   iscsiadm -m session -R
+  
+  # 删除残留的盘符及路径信息
+  # https://blog.csdn.net/qyq88888/article/details/105692674
+  echo 1 > /sys/block/sdj/device/delete
   ```
 
 + **zfs**
 
   ``` shell
   # ZFS命令行大全
-  # https://blog.csdn.net/weixin_42293662/article/details/119707555
   # https://blog.51cto.com/u_13935220/5102153
+  # https://blog.csdn.net/weixin_42293662/article/details/119707555
   zfs list -t all -o name,origin,clones
   zfs create zfs-pool/test
   zfs snapshot zfs-pool/test@1
   zfs rollback zfs-pool/test@1
+  zfs clone zfs-pool/test@1 zfs-pool/test2
+  zfs promote zfs-pool/test2    # 解除依赖关系
+  zfs destroy zfs-pool/test
+  zfs list -t snapshot
+  zfs get all xbs_pool/backup-space
+  
+  zpool status
+  zpool list
+  zpool import # 列出所有可以利用的池子
+  zpool import zfs-pool # 使用池子，进而能够在zpool list看到
+  
+  zfs create nvme-ssd/data  # dataset
+  # zfs get all nvme-ssd/data | grep type  -> filesystem
+  zfs set quota=1.4T nvme-ssd/data
+  
+  zfs create -V 1.4T nvme-ssd/data   # zvol
+  mkfs.xfs /dev/zd*    # /dev/zvol/nvme-ssd/data1
+  挂载  mount /dev/disk/by-uuid/d1710afb-38a0-4332-9fc6-74b645ad968f /var/lib/kubelet/         通过UUID挂载 
+  
   
   # https://serverfault.com/questions/849966/zfs-delete-snapshots-with-interdependencies-and-clones
   # https://stackoverflow.com/questions/66925115/zfs-filesystem-has-dependent-clones
@@ -1328,6 +1436,33 @@ ls | xargs -t -I{} echo {}
   xfs_growfs /dev/vda1
   ```
 
++ **iotop**  排查是哪个进程对磁盘读写占用较高
+
++ **xstor_cli**
+
+  ``` shell
+  xstor_cli status      # 节点状态
+  xstor_cli status -d   # 所有卷状态
+  
+  # xbs 主机执行，或者拷贝 /opt/iscsi_target/iscsi-gateway.cfg 和 xstor_cli 到其它节点执行
+  # 创建 target
+  xstor_cli target create -t iqn.2024-01.com.istack.test
+  # 创建 target 的 initiator
+  xstor_cli client create -t iqn.2024-01.com.istack.test -c iqn.1994-05.com.redhat:503218a03b14
+  # 创建 卷，指定 副本数，挂到对应的 target 以及 initiator
+  xstor_cli disk create -i xbs_pool.test -s 10g -c 2 -t iqn.2024-01.com.istack.test -cl iqn.1994-05.com.redhat:503218a03b14
+  # 到对应 initiator 的目标宿主机执行，-p 是 xbs VIP    
+  iscsiadm -m discovery -t st -p 192.168.201.10 -d2
+  iscsiadm -m node -T iqn.2024-01.com.istack.test -l
+  
+  # xstor_cli target create -t iqn.2024-01.com.istack.test
+  # xstor_cli client create -t iqn.2024-01.com.istack.test -c iqn.1994-05.com.redhat:503218a03b14
+  # xstor_cli disk create -i xbs_pool.test -s 10g -c 2
+  # xstor_cli targetlun add -t iqn.2024-01.com.istack.test -d xbs_pool.test
+  # xstor_cli client create -t iqn.2024-01.com.istack.test -c iqn.1994-05.com.redhat:503218a03b14
+  # xstor_cli clientlun add -t iqn.2024-01.com.istack.test -c iqn.1994-05.com.redhat:503218a03b14 -d xbs_pool.test 
+  ```
+  
   
 
 
@@ -1521,13 +1656,13 @@ ls | xargs -t -I{} echo {}
   modify to # CONFIG_SYSTEM_TRUSTED_KEYS=""
   
   
-  # make prepare
-  # make scripts
-  # make CONFIG_OCFS2_FS=m CONFIG_OCFS2_FS_O2CB=m CONFIG_OCFS2_FS_USERSPACE_CLUSTER=m -C /usr/src/kernels/4.18.0-408.el8.x86_64 M=/usr/src/kernels/4.18.0-408.el8.x86_64/fs/ocfs2 modules
+  make prepare
+  make scripts
+  make CONFIG_OCFS2_FS=m CONFIG_OCFS2_FS_O2CB=m CONFIG_OCFS2_FS_USERSPACE_CLUSTER=m -C /usr/src/kernels/4.18.0-408.el8.x86_64 M=/usr/src/kernels/4.18.0-408.el8.x86_64/fs/ocfs2 modules
   
-  make
-  make modules_install
-  make install
+  # make
+  # make modules_install
+  # make install
   
   cd /lib/modules
   ls 4.18.0/kernel/fs/ocfs2/  -lh
@@ -1712,7 +1847,6 @@ ls | xargs -t -I{} echo {}
   proxy_set_header Upgrade $http_upgrade;
   proxy_set_header Connection "upgrade";
   proxy_http_version 1.1;
-  proxy_set_header Connection;
   chunked_transfer_encoding off;
   proxy_cache off;
   ```
@@ -1788,9 +1922,14 @@ ls | xargs -t -I{} echo {}
   iptables -t filter FORWARD -d 192.168.1.22/32 -j ACCEPT # 转发的FROWARD要允许双方的数据传输
   iptables -t filter FORWARD -s 192.168.1.22/32 -j ACCEPT
   
-  # 保存恢复
-  iptables-save > /etc/sysconfig/iptables
-  iptables-restore < /etc/sysconfig/iptables
+  # 暂时关闭防火墙，保存恢复
+  iptables-save > /root/firewall_rules.backup
+  iptables -F                  # 删除所有策略链
+  iptables -X                  # 删除用户定义的链
+  iptables -P INPUT ACCEPT     # 接受指定的流量
+  iptables -P OUTPUT ACCEPT
+  iptables -P FORWARD ACCEPT
+  iptables-restore < /root/firewall_rules.backup
   ```
 
 + **firewall-cmd**
@@ -1838,7 +1977,23 @@ ls | xargs -t -I{} echo {}
   # firewall-cmd --permanent --add-port=32080 添加端口
   # firewall-cmd --list-ports
   
+  # firewall-cmd --permanent --add-forward-port=port=80:proto=tcp:toaddr=192.168.0.1:toport=8080  # NAT
+  
   # firewall-cmd --reload 重载配置生效
+  
+  # firewall-cmd --list-all 
+  
+  # firewall-cmd --add-masquerade # 开启转发
+  
+  
+  # ipset       
+  # https://www.cnblogs.com/cash/p/13294208.html
+  # firewall-cmd --permanent --ipset=officewhitelist --get-entries
+  # firewall-cmd --permanent --ipset=officewhitelist --add-entry=192.168.10.11
+  
+  # rich-rules  
+  # https://cloud.tencent.com/developer/article/2288914
+  # firewall-cmd --permanent --add-rich-rule 'rule family="ipv4" source ipset="officewhitelist" forward-port port="9911" protocol="tcp" to-port="9000" to-addr="192.168.212.1"'
   ```
   
   ```
@@ -1850,7 +2005,8 @@ ls | xargs -t -I{} echo {}
 
   ```shell
   # https://www.cnblogs.com/wongbingming/p/13212306.html
-  -i any
+  tcpdump -i any icmp and host 192.168.211.1 -nn # -nn 数字显示IP:PORT，代替域名，方便看
+  tcpdump -i any tcp and port 22 and host 192.168.211.1 -nn
   ```
 
 + **/etc/sysconfig/network-scripts/**
@@ -1890,7 +2046,7 @@ ls | xargs -t -I{} echo {}
   192.168.2.0     0.0.0.0         255.255.255.0   U     100    0        0 eth0
   ```
 
-  **/etc/sysconfig/static-routes**
+  ****
 
   ```shell
   # 持久化配置
@@ -1913,6 +2069,30 @@ ls | xargs -t -I{} echo {}
   ip link set eth0 up  # ifconfig eth0 up
   ```
   
++ **iperf**
+
+  ``` shell
+  # iperf3 
+  # server
+  iperf3 -s -d 
+  # client
+  # 看吞吐
+  iperf3 -c 10.20.0.2
+  # 看重传次数
+  iperf3 -c 10.20.0.2 -i 10 -P 10 -t 60 -b 500M -R
+  ```
+
+  
+
++ **tc**
+
+  ``` shell
+  # https://blog.csdn.net/white_li5/article/details/131413673
+  tc qdisc add dev br202  root netem delay 50us
+  tc qdisc show dev br202
+  tc qdisc del dev br202 root
+  ```
+
   
 
 ##### cloud-init
@@ -1985,7 +2165,7 @@ https://access.redhat.com/documentation/zh-cn/red_hat_enterprise_linux/8/html/co
    例如，通过下面的命令，我们可以运行/bin/bash，并且进入nginx所在容器的namespace，可以查看该ns下的IP、进程等信息
 
    ``` shell
-   # nsenter --target 58212 --mount --uts --ipc --net --pid -- /bin/bash
+   # nsenter --target 56673 --mount --uts --ipc --net --pid -- /bin/bash
    root@f604f0e34bc2:/# ip addr
    1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000
        link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
@@ -2094,6 +2274,62 @@ qemu-img create -f raw disk.img 10G
 + /lib /liblocal
 
 
+
++ 袁富SSD+HDD Ceph集群调优：ceph tell 'osd.*' injectargs '--bluestore_prefer_deferred_size_ssd 16384'
+
++ 大容量RBD块（2T），删快照触发内部trim操作，很费性能
+
+  （osd_max_trimming_pgs=1,osd_pg_max_concurrent_snap_trims=1,osd_snap_trim_sleep=1）
+
++ 广东边缘云，有部分集群性能低下，服务器网卡处理数据能力不行，BIOS没开启高性能模式
+
+  （Advance Power Mgmt - Static Turbo - enable）
+
++ 计存分离组网，存储交换机是2层接入交换机，跟计算交换机同一层
+
+
+
++ 网络丢包，mtu不一致？
++ 数据库SQL执行慢，top发现资源满了，扩容内存
+
+
+
++ 线程池泄露（不要在方法里面反复创建线程池，销毁并退出方法时，可能会造成线程遗留）
+
++ cgroup kubepod pid_current pid_max
+
+  systemctl | grep $pod_uuid_前缀
+
+  /sys/fs/cgroup/pids/kubepods.slice/kubepods-burstable.slice/kubepods-burstable-podxxxxx    
+
+  
+
++ csi 不起作用，describe pvc 显示 node 标签不一致，是 CSINode 里的 topologyKeys 限制了，需要重启 csi-node
+
+
+
++ iam单点登录，无法从官网跳转控制台，原因是服务器时间跟北京时间不一致
+
+
+
++ 千兆：1Gbps 1000Mbps    万兆：10Gbps 10000Mbps
+
++ ceph集群，在计算侧执行rbd create/rm指令阻塞（rbd ls/ceph -s不会）
+
+  原因是有一台osd配置计算侧网关错误，导致集群内osd是在线，计算侧却访问不到（client->mon->client->osd）
+  
+  
+  
++ kubelet 不调用 csi mount 接口，发现 kubelet 日志报大页内存错误，
+  may not have pre-allocated hugepages for multiple page size.  
+  kubectl get node 里并没发现使用两种大页内存，但在系统上是发现了相关配置，置0即可。
+  echo "0" >  /sys/kernel/mm/hugepages/hugepages-1048576kB/nr_hugepages
+
+  
+
++ 配置 CoreDNS 100.94.137.40 k8s-test
+
+  可以ping IP，但ping不通域名，nslookup可以解析Address，但报错 server can't find。 原因是/etc/resolve.conf里配置了search，域名不完整时会拼接后缀。改成k8s-test.com即可。
 
 
 

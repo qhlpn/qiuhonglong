@@ -129,6 +129,21 @@
    --     on a.id = b.a_id
    --     若 a.id有加索引，b.a_id没有加索引，则 a 是被驱动表
    --     若 a.id有加索引，b.a_id也有加索引，则 b 是被驱动表
+   
+   
+   -- left join 直观理解
+   SELECT 
+       table_1.a t1_a, table_1.b t1_b, 
+       table_1.c t1_c, table_1.uid t1_uid,
+       table_2.uid t2_uid, table_2.a t2_a,
+       table_2.b t2_b
+   FROM table_1
+       LEFT JOIN table_2
+       ON table_1.uid = table_2.uid;
+   t1_a	t1_b	t1_c	t1_uid	t2_uid	t2_a	t2_b
+   100		101		102		1		1		10		10
+   200		201		202		2		2		20		10
+   300		301		302		3		NULL	NULL	NULL
    ```
 
 ### Select 执行顺序
@@ -442,6 +457,7 @@ update T set c = c + 1 where id = 2;
 > - **两段锁协议**：事务执行分为 **加锁**阶段 和 **解锁**阶段。事务开启后，行锁在需要时才上锁（加锁阶段中），但只有等到事务结束时才解锁（ rollback/commit 进入解锁阶段 ），会有死锁隐患。
 >   - 注意在写事务SQL时，把最可能影响并发度的锁**往后放**。（比如减库存并记录交易：先 insert 后 update）
 >   - 如果过滤条件无法走 **索引** ，InnoDB **存储引擎层面** 就会将所有记录 **加锁** 后返回，再由 **Server层** 进行过滤，并 **释放** 不满足条件的记录锁（**优化操作**，但违背二段锁协议约束）
+>   - MVCC 读操作 分 **快照读**（视图范围，用于 **不加锁** 操作，如 select where 操作） 和 **当前读**（全局当前版本，用于 **加锁** 操作）
 > - 事务 **死锁** 解决策略：
 >   - 设置等待超时阈值 **innodb_lock_wait_timeout** = 50 dft （太小会有误伤）
 >   - 死锁检测，发现死锁主动回滚 **innodb_deadlock_detect** = on dft （额外的检测负担）

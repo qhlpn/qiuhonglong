@@ -1067,6 +1067,21 @@ Service 解决 Deployment 管理的 Pod IP 动态变化问题
               serviceName: tomcat-service
               servicePort: 8080
     ```
+    
+  + **Ingress 配置**
+
+    ``` shell
+    Annotations : https://blog.csdn.net/weixin_41020960/article/details/127123189
+    
+    configmap:    https://kubernetes.github.io/ingress-nginx/user-guide/nginx-configuration/configmap/
+                  https://kubernetes.github.io/ingress-nginx/user-guide/exposing-tcp-udp-services/
+    ```
+
+    
+
+    
+
+    
 
 + **Endpoint**
 
@@ -1149,6 +1164,48 @@ Service 解决 Deployment 管理的 Pod IP 动态变化问题
       - protocol: TCP
         port: 5978
   ```
+
++ **CoreDNS**
+
+  ``` yaml
+  # kubectl get cm -n kube-system coredns -o yaml
+  ---
+  apiVersion: v1
+  data:
+    Corefile: |
+      .:53 {
+          errors
+          ready
+          health
+          kubernetes cluster.local in-addr.arpa ip6.arpa {
+              pods insecure
+              fallthrough in-addr.arpa ip6.arpa
+          }
+          prometheus :9153
+          forward . /etc/resolv.conf
+          cache 30
+          reload
+          loadbalance
+      }
+      k8s-test.com:53 {
+          errors
+          hosts {
+              100.94.137.40 k8s-test.com
+              ttl 60
+              reload 15s
+          }
+          cache 30
+      }
+  kind: ConfigMap
+  
+  # /etc/resolve.conf: DNS客户端配置文件
+  # nameserver 定义DNS服务器的IP地址
+  # domain 定义主机的域名。domain和search不能共存；如果同时存在，后面出现的将会被使用。
+  # search 定义域名的搜索列表。eg search domainname.com 表示当提供了一个不包含完全域名的主机名时，在该主机名后添加domainname.com的后缀
+  # sortlist 允许将得到域名结果进行特定的排序。它的参数为网络/掩码对，允许任意的排列顺序
+  ```
+
+  
 
   
 
@@ -1846,29 +1903,12 @@ kubectl [command] [resourceType] [name] [flags -n -A -o]   # kubectl集群命令
    kubectl port-forward  
    ```
    
-   
-
-
 
 #### 资源类型
 
 ```shell
 kubectl api-resources   # kubernetes中所有的内容都抽象为资源
 ```
-
-
-
-#### 资源管理方式
-
-1. 命令式：
-
-   kubectl create deployment nginx --image=nginx:1.17.1 --dry-run=client -n dev -o yaml
-
-   kubectl run nginx --image=nginx:1.17.1 --port=80 --namespace=dev
-
-2. 命令式 + 配置：kubectl create/patch -f nginx-pod.yaml
-
-3. 声明式 + 配置： kubectl apply -f nginx-pod.yaml
 
 
 
@@ -2113,7 +2153,62 @@ K8s 为支持 CSI 标准，包含如下 API 对象：
     attached: true
   ```
 
+#### CSC工具
 
+我们可以通过CSC工具来进行grpc接口的测试：
+
+```sh
+$ GO111MODULE=off go get -u github.com/rexray/gocsi/csc
+```
+
+**Get plugin info**
+
+```
+$ csc identity plugin-info --endpoint tcp://127.0.0.1:10000
+"csi-hostpath"  "0.1.0"
+```
+
+**Create a volume**
+
+```
+$ csc controller new --endpoint tcp://127.0.0.1:10000 --cap 1,block CSIVolumeName
+CSIVolumeID
+```
+
+**Delete a volume**
+
+```
+$ csc controller del --endpoint tcp://127.0.0.1:10000 CSIVolumeID
+CSIVolumeID
+```
+
+**Validate volume capabilities**
+
+```
+$ csc controller validate-volume-capabilities --endpoint tcp://127.0.0.1:10000 --cap 1,block CSIVolumeID
+CSIVolumeID  true
+```
+
+**NodePublish a volume**
+
+```
+$ csc node publish --endpoint tcp://127.0.0.1:10000 --cap 1,block --target-path /mnt/hostpath CSIVolumeID
+CSIVolumeID
+```
+
+**NodeUnpublish a volume**
+
+```
+$ csc node unpublish --endpoint tcp://127.0.0.1:10000 --target-path /mnt/hostpath CSIVolumeID
+CSIVolumeID
+```
+
+**Get Nodeinfo**
+
+```
+$ csc node get-info --endpoint tcp://127.0.0.1:10000
+CSINode
+```
 
 
 
@@ -2132,13 +2227,76 @@ K8s 为支持 CSI 标准，包含如下 API 对象：
 
 
 
-### Extension API Server
+### EXT API Server
 
 https://blog.csdn.net/weixin_38299404/article/details/121038582
 
 https://kubernetes.io/zh-cn/docs/tasks/extend-kubernetes/setup-extension-api-server/
 
 http://www.asznl.com/post/42
+
+#### APIServer
+
+``` yaml
+---
+apiVersion: apiregistration.k8s.io/v1
+kind: APIService
+metadata:
+  name: v1beta1.scheduler.nest.io
+spec:
+  group: scheduler.nest.io
+  groupPriorityMinimum: 100
+  insecureSkipTLSVerify: true
+  service:
+    name: nest-scheduler
+    namespace: {{ .Values.namespace }}
+    port: 8088
+  version: v1beta1
+  versionPriority: 100
+
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: nest-scheduler
+  namespace: {{ .Values.namespace }}
+spec:
+  type: ClusterIP
+  selector:
+    app: nest-scheduler
+  ports:
+    - protocol: TCP
+      port: 8088
+      targetPort: 8088
+      name: http
+    - protocol: TCP
+      port: 443
+      targetPort: 443
+      name: https
+```
+
+#### ValidatingWebhookConfiguration
+
+https://www.qikqiak.com/post/k8s-admission-webhook/
+
+#### Resource/SubResource
+
+https://www.cnblogs.com/xuchenCN/p/12522167.html
+
+``` shell
+# update subresource status
+curl -k -H "Authorization: Bearer ey**M9c"  -H "Content-Type: application/json" -X PUT https://istack-vip:8888/apis/kubevirt.io/v1/namespaces/n10012294/virtualmachines/evm-w-4haq39ffgcu8/status -d '@evm-w-4haq39ffgcu8.json'
+```
+
+
+
+### EXT Scheduler
+
+调度器 = Fliter 过滤 + Score 打分
+
+https://www.qikqiak.com/post/custom-kube-scheduler/
+
+https://cloud.tencent.com/developer/article/1644857
 
 
 
@@ -2317,12 +2475,6 @@ CRI（container runtime interface）：Kubernetes推出自己的运行时接口�
 <img src="pictures/MTc1qs.jpg" alt="kubelet CRI" style="zoom:125%;" />
 
 
-
-### 调度
-
-过滤 + 打分
-
-https://cloud.tencent.com/developer/article/1644857
 
 
 

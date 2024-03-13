@@ -118,6 +118,7 @@ typedef struct redisObject {
 
   | 命令                 | 说明                         |
   | -------------------- | ---------------------------- |
+  | select idx           | 选择桶                       |
   | keys pattern         | 查找键 （keys * 查找所有键） |
   | exists key [key ...] | 查询键是否存在               |
   | del key [key ...]    | 删除键                       |

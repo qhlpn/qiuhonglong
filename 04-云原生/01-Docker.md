@@ -165,6 +165,13 @@ cat /etc/docker/daemon.json
 K8S使用secret连接仓库拉取镜像：http://docs.kubernetes.org.cn/554.html
 ```
 
+```
+curl http://192.168.211.204:5000/v2/_catalog  # 获取镜像列表
+curl http://192.168.211.204:5000/v2/nest-lib/nest-backup/tags/list  # 获取镜像版本
+```
+
+
+
 
 
 #### 多镜像架构

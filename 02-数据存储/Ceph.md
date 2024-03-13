@@ -415,7 +415,7 @@ ansible-playbook site.yml
        ```
        ceph-volume lvm create --bluestore --data centos/data --block.wal centos/wal --block.db centos/meta
        ```
-       
+    
     4. 删除 osd 服务
 
        ``` shell
@@ -425,13 +425,18 @@ ansible-playbook site.yml
        ceph osd out osd.0
        ceph osd down osd.0
        ceph osd purge osd.0 --yes-i-really-mean-it
-       
-       
-       for sc in ; do 
-       
-       
-       ;done
        ```
+    
+    5. osd挂了重启服务
+    
+       ``` shell
+       # osd down 和 out
+       # osd out 后将不计入集群内，即使 osd down 了，ceph -s 依然是 OK
+       ceph osd in osd.0  
+       system start ceph-osd@0
+       ```
+    
+       
     
 + **rgw**
 
@@ -443,9 +448,10 @@ ansible-playbook site.yml
     
     chown -R ceph:ceph /var/lib/ceph/radosgw/ceph-rgw.`hostname`
     
-    ceph osd crush rule dump  # get rule
+    ceph osd crush rule dump  # get rule replicated-rule-f89af0ab787d
     
     for i in {.rgw.root,default.rgw.control,default.rgw.meta,default.rgw.log,default.rgw.buckets.index,default.rgw.buckets.non-ec};do ceph osd pool create $i 8 8 replicated $rule;done
+    
     ceph osd pool create default.rgw.buckets.data 64 64 replicated $rule
     
     for i in {.rgw.root,default.rgw.control,default.rgw.meta,default.rgw.log,default.rgw.buckets.index,default.rgw.buckets.non-ec,default.rgw.buckets.data};do ceph osd pool application enable $i rgw;done
@@ -460,8 +466,11 @@ ansible-playbook site.yml
     
     systemctl enable ceph-radosgw@rgw.`hostname`
     systemctl start ceph-radosgw@rgw.`hostname`
+    
+    radosgw-admin user create --uid admin --display-name "Admin User" --caps "buckets=*;users=*;usage=read;metadata=read;zone=read"
+    http://192.168.201.1:8080  8OHFGVT3G7HZYMLL7P32 XZQoexrv0TKEDzgyGhxtrjA9rCmGxod0e1CQOmAp
     ```
-
+    
     
 
 
@@ -488,6 +497,7 @@ ceph config get mon.node-1 auth_allow_insecure_global_id_reclaim # get 需要指
 # 2. 套接字 / 进程
 ceph --admin-daemon /var/run/ceph/ceph-mon.mode-1.asok config [show|set...]
 ceph daemon osd.0 config [get|set...]
+ceph tell 'osd.*' injectargs '--bluestore_prefer_deferred_size_ssd 16384'
 # 3. ceph.conf 
 vi /etc/ceph/ceph.conf
 ```
@@ -711,6 +721,15 @@ osd_heartbeat_interval = 5
   ceph osd set nodeep-scrub
   ceph osd unset noscrub
   ceph osd unset nodeep-scrub
+  
+  
+  # scrubbed 功能用于 PG，是为了检测 PG 分布到各 osds 上的元数据信息是否一致，
+  # deep-scrubbed 的检测模式除了检测数据的元数据信息外，还会检测数据的内容是否一致，速度较慢且消耗磁盘读取
+  
+  # pgs not deep-scrubbed in time
+  # pgs not scrubbed in time
+  ceph health detail # 查看 pg ID
+  ceph pg deep-scrub 3.6
   ```
 + 操作示例
 
@@ -743,12 +762,28 @@ osd_heartbeat_interval = 5
   # osd 副本间数据一致性检查
   ceph osd scrub {who}
   ceph pg scrub {pg.id}  # ceph pg dump -> pg.id
+  
+  
+  # 临时踢盘
+  ceph osd out osd.{osd_number}
+  ceph osd crush remove osd.{osd_number}
+  # 再加回盘
+  ceph osd crush create-or-move osd.{osd_number} {weight} host={hostname}
+  ceph osd in osd.{osd_number}
   ```
   
   
 
 #### 2.4 mgr
 
+```shell
+curl -X POST "https://10.80.251.37:8880/api/auth" \
+  -H  "Accept: application/vnd.ceph.api.v1.0+json" \
+  -H  "Content-Type: application/json" \
+  -d '{"username": "xxx", "password": "xxx"}' -k
+
+# https://tracker.ceph.com/issues/55837
+```
 
 
 
@@ -843,6 +878,8 @@ osd_heartbeat_interval = 5
   
   Ceph的 RBD快照和克隆均采用了COW机制，在对 RBD进行创建快照和克隆操作时，此过程不会涉及数据复制，故这些操作可瞬时完成
   
+  RBD的快照和克隆在实现层面完全不同。快照时RADOS支持的，基于OSD服务端的COW机制实现的。而RBD的克隆操作完全是RBD客户端实现的一种COW机制，对于OSD的Server端是无感知的。      https://ivanzz1001.github.io/records/post/ceph/2019/01/10/ceph-src-code-part9_1
+  
   
   https://developer.aliyun.com/article/794631
   https://www.modb.pro/db/50691
@@ -908,6 +945,8 @@ osd_heartbeat_interval = 5
       rbd export-diff {pool-name}/{image-name}@{snap-name} - | rbd import-diff - {pool-name}/{image-name}  # PIPE写法
       ```
   
++ 快照组
+
 + 任务队列
 
   ``` shell
@@ -945,7 +984,7 @@ radosgw-admin user info --uid=demo --tenant=demo
 
 
 
-#### 2.8 rados object
+#### 2.8 rados 对象存储
 
 > object 对象操作：https://docs.ceph.com/en/latest/man/8/rados/
 
@@ -954,6 +993,8 @@ rbd info {pool-name}/{image-name}  --> block_name_prefix
 rados -p {pool-name} ls | grep {block_name_prefix}   # object list
 rados -p {pool-name} stat {block_name_prefix}.000000000000423  # object stat 大小
 ceph osd map {pool-name} {block_name_prefix}.000000000000423 # object 映射到 pg osd 
+
+rados -p rbd get gateway.conf  gateway.conf 
 ```
 
 
@@ -989,10 +1030,37 @@ ceph osd setcrushmap -i newcrushmap
 #### 2.9  log
 
 > cd /var/log/ceph/
+> 整体看 /var/log/ceph/ceph.log 
 
 
 
 #### 2.10 bench
+
+```
+ceph iostat
+ceph osd perf
+ceph daemon osd.X dump_historic_slow_ops
+ceph daemon osd.X perf dump
+rbd perf image iostat
+rbd perf image iotop
+
+# 排查案例
+health warnning: 727 slow requests are blocked > 32 secs. Implicated osds x.x.x
+ceph osd perf | sort -nk 3 
+查看osd的时延情况，每个osd都有概率存在延时很高的情况，排除单个慢盘拖垮集群的可能性
+找几个osd观察io处理耗时时间
+命令：ceph daemon osd.X dump_historic_slow_ops
+发现很多阶段处理时间超过10s
+queued_for_pg -> reached_pg
+sub_op_committed -> sub_op_applied
+sub_op_applied -> commit_sent
+说明op都处于等待执行，这几种情况的原因主要有:
+1、	磁盘读写慢，导致某些op处理很慢，进而引发后续op无法被及时处理
+2、	队列本身的处理能力不足，线程数太少或cpu过于繁忙
+3、	pg数量过多，使得写入压力上来后，op数量过多
+```
+
+
 
 **fio**
 
@@ -1005,99 +1073,73 @@ ceph osd setcrushmap -i newcrushmap
 ``` shell
 #!/bin/bash
 time_now=`date "+%Y%m%d%H%M%S"`
-#time_now="bak"
-mkdir  ${time_now}; cd ${time_now};
+mkdir ${time_now}; cd ${time_now};
 test_rst="test_rst.rst"
-t=$1
-if [[ ''$t == '' ]]; then
-    t=120
-fi
- 
-declare -A "randread_4k"
-randread_4k["log"]="randread_4k.log"
-randread_4k["cmd"]="fio -direct=1 -iodepth=128 -rw=randread -ioengine=libaio -bs=4k -time_based=1 -numjobs=1 -runtime=$t -group_reporting -filename=iotest -name=test -size=10G"
-`${randread_4k["cmd"]} > ${randread_4k["log"]}`
-randread_4k["rst"]=`cat ${randread_4k["log"]}  | grep "IOPS" | cut -d, -f 1 | cut -d= -f 2`
-randread_4k["util"]=`cat ${randread_4k["log"]}  | grep "util=" | awk -F= '{print $NF}'`
-printf "%-10s %-10s %-16s %-16s\n" " "            " "          "平均值" "磁盘利用率" >> ${test_rst}
-printf "%-12s %-13s %-12s %-12s\n" "IOPS"         "4K随机读"   "${randread_4k["rst"]}  ${randread_4k["util"]}" >> ${test_rst}
-rm -f iotest
-echo "============================IOPS  4K随机读================================"
-echo ${randread_4k["cmd"]}
-cat ${randread_4k["log"]}
-echo "=========================================================================="
- 
-declare -A "randwrite_4k"
-randwrite_4k["log"]="randwrite_4k.log"
-randwrite_4k["cmd"]="fio -direct=1 -iodepth=128 -rw=randwrite -ioengine=libaio -bs=4k -time_based=1 -numjobs=1 -runtime=$t -group_reporting -filename=iotest -name=test -size=10G"
-`${randwrite_4k["cmd"]} > ${randwrite_4k["log"]}`
-randwrite_4k["rst"]=`cat ${randwrite_4k["log"]}  | grep "IOPS" | cut -d, -f 1 | cut -d= -f 2`
-randwrite_4k["util"]=`cat ${randwrite_4k["log"]}  | grep "util=" | awk -F= '{print $NF}'`
-printf "%-12s %-13s %-12s %-12s\n" "IOPS"  "4K随机写"  "${randwrite_4k["rst"]}  ${randwrite_4k["util"]}" >> ${test_rst}
-rm -f iotest
-echo "============================IOPS  4K随机写================================"
-echo ${randwrite_4k["cmd"]}
-cat ${randwrite_4k["log"]}
-echo "=========================================================================="
-  
- 
- 
-declare -A "read_1024k"
-read_1024k["log"]="read_1024k.log"
-read_1024k["cmd"]="fio -direct=1 -iodepth=64 -rw=read -ioengine=libaio -bs=1024K -time_based=1 -numjobs=1  -runtime=$t -group_reporting -filename=iotest -name=test -size=10G"
-`${read_1024k["cmd"]} > ${read_1024k["log"]}`
-read_1024k["rst"]=`cat ${read_1024k["log"]}  | grep IOPS | cut -d= -f 3 | cut -d" " -f 1`
-read_1024k["util"]=`cat ${read_1024k["log"]}  | grep "util=" | awk -F= '{print $NF}'`
-printf "%-15s %-13s %-12s %-12s\n" "吞吐量"       "1024K顺序读" "${read_1024k["rst"]}  ${read_1024k["util"]}" >> ${test_rst}
-rm -f iotest
-echo "============================吞吐量   1024K顺序读=========================="
-echo ${read_1024k["cmd"]}
-cat ${read_1024k["log"]}
-echo "=========================================================================="
-   
-   
+dev=$1
+t=120
+echo $dev
+
+echo "============================预写    100%空间=========================="
+fio -direct=1 -iodepth=64 -rw=write -ioengine=libaio -bs=1024k -time_based=1 -numjobs=1 -group_reporting -filename=$dev -name=test -size=100%
+sleep 10
+
 declare -A "write_1024k"
 write_1024k["log"]="write_1024k.log"
-write_1024k["cmd"]="fio -direct=1 -iodepth=64 -rw=write -ioengine=libaio -bs=1024k -time_based=1 -numjobs=1  -runtime=$t -group_reporting -filename=iotest -name=test -size=10G"
+write_1024k["cmd"]="fio -direct=1 -iodepth=64 -rw=write -ioengine=libaio -bs=1024k -time_based=1 -numjobs=1  -runtime=$t -group_reporting -filename=$dev -name=test -size=10G"
 `${write_1024k["cmd"]} > ${write_1024k["log"]}`
 write_1024k["rst"]=`cat ${write_1024k["log"]}  | grep IOPS | cut -d= -f 3 | cut -d" " -f 1`
 write_1024k["util"]=`cat ${write_1024k["log"]}  | grep "util=" | awk -F= '{print $NF}'`
+printf "%-10s %-10s %-16s %-16s\n" " "            " "          "平均值" "磁盘利用率" >> ${test_rst}
 printf "%-15s %-13s %-12s %-12s\n" "吞吐量"       "1024k顺序写"  "${write_1024k["rst"]}  ${write_1024k["util"]}" >> ${test_rst}
-rm -f iotest
 echo "============================吞吐量   1024k顺序写=========================="
 echo ${write_1024k["cmd"]}
 cat ${write_1024k["log"]}
 echo "=========================================================================="
-   
-   
-declare -A "read_4k"
-read_4k["log"]="read_4k.log"
-read_4k["cmd"]="fio -direct=1 -iodepth=1 -rw=read -ioengine=libaio -bs=4k -time_based=1 -numjobs=1 -runtime=$t -group_reporting -filename=iotest -name=test -size=10G"
-`${read_4k["cmd"]} > ${read_4k["log"]}`
-read_4k["rst"]=`cat ${read_4k["log"]}| grep -E "lat.*avg.*" | egrep -v "slat|clat" | sed 's/.*avg=//'| cut -d, -f1``cat ${read_4k["log"]}| grep -E "lat.*avg.*" | egrep -v "slat|clat" |sed 's/.*(//'| sed 's/).*//'`
-read_4k["util"]=`cat ${read_4k["log"]}  | grep "util=" | awk -F= '{print $NF}'`
-printf "%-15s %-13s %-12s %-12s\n" "平均响应时间" "4K顺序读"  "${read_4k["rst"]}  ${read_4k["util"]}" >> ${test_rst}
-rm -f iotest
-echo "============================平均响应时间    4k顺序读========================"
-echo ${read_4k["cmd"]}
-cat ${read_4k["log"]}
+sleep 10
+
+declare -A "read_1024k"
+read_1024k["log"]="read_1024k.log"
+read_1024k["cmd"]="fio -direct=1 -iodepth=64 -rw=read -ioengine=libaio -bs=1024K -time_based=1 -numjobs=1  -runtime=$t -group_reporting -filename=$dev -name=test -size=10G"
+`${read_1024k["cmd"]} > ${read_1024k["log"]}`
+read_1024k["rst"]=`cat ${read_1024k["log"]}  | grep IOPS | cut -d= -f 3 | cut -d" " -f 1`
+read_1024k["util"]=`cat ${read_1024k["log"]}  | grep "util=" | awk -F= '{print $NF}'`
+printf "%-15s %-13s %-12s %-12s\n" "吞吐量"       "1024K顺序读" "${read_1024k["rst"]}  ${read_1024k["util"]}" >> ${test_rst}
+echo "============================吞吐量   1024K顺序读=========================="
+echo ${read_1024k["cmd"]}
+cat ${read_1024k["log"]}
 echo "=========================================================================="
-   
-   
-declare -A "write_4k"
-write_4k["log"]="write_4k.log"
-write_4k["cmd"]="fio -direct=1 -iodepth=1 -rw=write -ioengine=libaio -bs=4k -time_based=1 -numjobs=1 -runtime=$t -group_reporting -filename=iotest -name=test -size=10G"
-`${write_4k["cmd"]} > ${write_4k["log"]}`
-write_4k["rst"]=`cat ${write_4k["log"]}| grep -E "lat.*avg.*" | egrep -v "slat|clat" | sed 's/.*avg=//'| cut -d, -f1``cat ${write_4k["log"]}| grep -E "lat.*avg.*" | egrep -v "slat|clat" |sed 's/.*(//'| sed 's/).*//'`
-write_4k["util"]=`cat ${write_4k["log"]}  | grep "util=" | awk -F= '{print $NF}'`
-printf "%-15s %-13s %-12s %-12s\n" "平均响应时间" "4K顺序写"   "${write_4k["rst"]}  ${write_4k["util"]}" >> ${test_rst}
-rm -f iotest
-echo "============================平均响应时间    4k顺序写========================"
-echo ${write_4k["cmd"]}
-cat ${write_4k["log"]}
+sleep 10
+
+declare -A "randwrite_4k"
+randwrite_4k["log"]="randwrite_4k.log"
+randwrite_4k["cmd"]="fio -direct=1 -iodepth=128 -rw=randwrite -ioengine=libaio -bs=4k -time_based=1 -numjobs=1 -runtime=$t -group_reporting -filename=$dev -name=test -size=10G"
+`${randwrite_4k["cmd"]} > ${randwrite_4k["log"]}`
+randwrite_4k["rst"]=`cat ${randwrite_4k["log"]}  | grep "IOPS" | cut -d, -f 1 | cut -d= -f 2`
+randwrite_4k["util"]=`cat ${randwrite_4k["log"]}  | grep "util=" | awk -F= '{print $NF}'`
+printf "%-12s %-13s %-12s %-12s\n" "IOPS"  "4K随机写"  "${randwrite_4k["rst"]}  ${randwrite_4k["util"]}" >> ${test_rst}
+echo "============================IOPS  4K随机写================================"
+echo ${randwrite_4k["cmd"]}
+cat ${randwrite_4k["log"]}
 echo "=========================================================================="
-   
+sleep 10
+
+declare -A "randread_4k"
+randread_4k["log"]="randread_4k.log"
+randread_4k["cmd"]="fio -direct=1 -iodepth=128 -rw=randread -ioengine=libaio -bs=4k -time_based=1 -numjobs=1 -runtime=$t -group_reporting -filename=$dev -name=test -size=10G"
+`${randread_4k["cmd"]} > ${randread_4k["log"]}`
+randread_4k["rst"]=`cat ${randread_4k["log"]}  | grep "IOPS" | cut -d, -f 1 | cut -d= -f 2`
+randread_4k["util"]=`cat ${randread_4k["log"]}  | grep "util=" | awk -F= '{print $NF}'`
+printf "%-12s %-13s %-12s %-12s\n" "IOPS"         "4K随机读"   "${randread_4k["rst"]}  ${randread_4k["util"]}" >> ${test_rst}
+echo "============================IOPS  4K随机读================================"
+echo ${randread_4k["cmd"]}
+cat ${randread_4k["log"]}
+echo "=========================================================================="
+sleep 10
+
 cat ${test_rst}
+
+
+fio -direct=1 -iodepth=128 -rw=randrw -rwmixread=70 -ioengine=libaio -bs=8k -time_based=1 -numjobs=8 -runtime=120 -group_reporting -filename=/dev/vdc -name=test -size=10G
 ```
 
 > 1. 测试随机读写时，numjobs从8开始，12..16..20..逐渐往上加，直到IOPS不再上升
@@ -1425,7 +1467,7 @@ librbd::Operations: snapshot is protected
 # ==========================
 rbd create -f layering parent
 rbd snap create parent@snap
-rbd clone --rbd-default-clone-format=2 -f layering parent@snap child # 不带deep-flatten 
+rbd clone --rbd-default-clone-format 2 --image-feature layering parent@snap child # 不带deep-flatten 
 rbd snap create child@snap
 rbd flatten child
 rbd snap rm parent@snap
@@ -1437,7 +1479,7 @@ rbd rm parent  # ok
 # ==========================
 rbd create -f layering parent
 rbd snap create parent@snap
-rbd clone --rbd-default-clone-format=2 -f layering,deep-flatten parent@snap child  # 带deep-flatten
+rbd clone --rbd-default-clone-format 2 --image-feature layering,deep-flatten parent@snap child  # 带deep-flatten
 rbd snap create child@snap
 rbd flatten child
 rbd snap rm parent@snap

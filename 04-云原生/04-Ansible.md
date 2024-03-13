@@ -122,7 +122,7 @@ Inventory 主机清单
 ### Playbook
 + **运行指令**
 
-  ```
+  ```shell
   ansible-playbook <filename.yml> ... [options]
   
   常见选项
@@ -168,4 +168,7 @@ Inventory 主机清单
   ＃ 当 play 和 task 的 tag 不匹配该参数指定的值时，才执行
   -v, --verbose   
   ＃输出更详细的执行过程信息，-vvv可得到所有执行过程信息。
+  
+  # ansible-playbook playbook.yml -i hosts -v -u eecdn -k
+  SSH password:
   ```
