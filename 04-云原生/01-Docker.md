@@ -109,7 +109,6 @@ $ docker version
   # 查看容器元数据
   docker inspect
   
-  
   docker run -d --name nest-db harbor.ctyuncdn.cn/nest-dev/nest-db:22.2.5
   ```
 
@@ -212,6 +211,8 @@ main(){
 }
 
 main $@
+
+docker pull harbor.ctyuncdn.cn/xstore-dev/xstore-iscsi-csi@sha256:4fc1daf0b7cdf5fa25cbad4de0fa3cba54f2c2d4316f0dcca219c900d8274f97
 ```
 
 
@@ -268,6 +269,10 @@ https://blog.csdn.net/sinat_38453878/article/details/123345268
          username = ""
          password = ""
    ```
+   
+3. crt images 指令管理镜像
+
+​	
 
 
 
@@ -278,6 +283,9 @@ https://blog.csdn.net/sinat_38453878/article/details/123345268
 cat /etc/rancher/k3s/registries.yaml
 
 mirrors:
+  harbor.ctyuncdn.cn:
+    endpoint:
+      - "http://127.0.0.1:5000"
 configs:
   "harbor.ctyuncdn.cn":
     auth:

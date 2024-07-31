@@ -245,8 +245,9 @@ ansible-playbook site.yml
      osd_pool_default_min_size = 1
      osd_pool_default_pg_num = 64
      osd_pool_default_pgp_num = 64
-     osd_crush_chooseleaf_type = 0
+     osd_crush_chooseleaf_type = 1
      EOF
+     # 单机版 osd_crush_chooseleaf_type = 0 && crushmap: step chooseleaf firstn 0 type osd
      ```
 
   2. 配置集群 monmap 信息
@@ -448,7 +449,7 @@ ansible-playbook site.yml
     
     chown -R ceph:ceph /var/lib/ceph/radosgw/ceph-rgw.`hostname`
     
-    ceph osd crush rule dump  # get rule replicated-rule-f89af0ab787d
+    ceph osd crush rule dump  # get rule replicated-rule-163c4a1e574f
     
     for i in {.rgw.root,default.rgw.control,default.rgw.meta,default.rgw.log,default.rgw.buckets.index,default.rgw.buckets.non-ec};do ceph osd pool create $i 8 8 replicated $rule;done
     
@@ -468,7 +469,25 @@ ansible-playbook site.yml
     systemctl start ceph-radosgw@rgw.`hostname`
     
     radosgw-admin user create --uid admin --display-name "Admin User" --caps "buckets=*;users=*;usage=read;metadata=read;zone=read"
-    http://192.168.201.1:8080  8OHFGVT3G7HZYMLL7P32 XZQoexrv0TKEDzgyGhxtrjA9rCmGxod0e1CQOmAp
+    http://192.168.201.1:8080  RTB4W3CIJF6T98UPOXZB 7oscvN5y46ZLr35sELRHUQBCo4t8KyFrTA9UWgxr
+    ```
+    
+    
+    
++ **iscsi-bgw**
+
+    ``` shell
+    iscsi-bgw-1.0-9fba70b.tar.gz  
+    iscsi-target-package.tar.gz
+    iscsi_tgw_deploy.sh
+    tar zxf iscsi-bgw-1.0-*.tar.gz
+    sh iscsi-bgw-1.0/gateway_deploy.sh xstore/-------------- rbd_hdd/gateway.conf 0.0.0.0/0 K01-P01GZ-DN-001.gd.cn/192.168.201.1
+    sh iscsi_tgw_deploy.sh
+    echo "minimum_gateways = 1" >> /etc/ceph/iscsi-gateway.cfg
+    systemctl restart rbd-target-api.service
+    systemctl restart rbd-target-gw.service
+    cp ceph.conf c1313657-12d4-47c3-b6dc-16d3a001595a.conf
+    cp ceph.client.admin.keyring c1313657-12d4-47c3-b6dc-16d3a001595a.keyring
     ```
     
     
@@ -492,11 +511,12 @@ ceph {mon/osd/pg/...} dump # 详情
 ceph --show-config
 # 修改 ceph  配置 （1.2 临时生效，3 永久生效）
 # 1. ceph config
-ceph config set mon mon_allow_pool_delete true
-ceph config get mon.node-1 auth_allow_insecure_global_id_reclaim # get 需要指明具体的节点，set 则不用
+ceph config set 'mon.*' mon_allow_pool_delete true
+ceph config get 'mon.*' auth_allow_insecure_global_id_reclaim 
+
 # 2. 套接字 / 进程
 ceph --admin-daemon /var/run/ceph/ceph-mon.mode-1.asok config [show|set...]
-ceph daemon osd.0 config [get|set...]
+ceph daemon 'osd.*' config [get|set...]
 ceph tell 'osd.*' injectargs '--bluestore_prefer_deferred_size_ssd 16384'
 # 3. ceph.conf 
 vi /etc/ceph/ceph.conf
@@ -822,6 +842,7 @@ curl -X POST "https://10.80.251.37:8880/api/auth" \
   rbd create --size {megabytes} [--image-feature feature-name (layering)] {pool-name}/{image-name}
   rbd ls {poolname}
   rbd info {pool-name}/{image-name}
+  rbd info -p {pool-name} --image-id {image-id}
   rbd rm {pool-name}/{image-name}
   rbd status {pool-name}/{image-name}  -> watcher
   ceph osd blacklist add watcher
@@ -865,8 +886,8 @@ curl -X POST "https://10.80.251.37:8880/api/auth" \
 + RBD回收站机制
 
   ```shell
-  rbd trash mv {pool-name}/{image-name}      # 移至回收站 
-  rbd trash ls {pool-name}
+  rbd trash mv {pool-name}/{image-name} --expires-at "2024-06-07 14:00:00"     # 移至回收站 
+  rbd trash ls {pool-name}  --long
   rbd trash restore {trashID}    # 从回收站恢复
   rbd trash rm {trashID}         # 删除回收站
   ```
@@ -923,6 +944,8 @@ curl -X POST "https://10.80.251.37:8880/api/auth" \
     rbd snap protect {pool-name}/{image-name}@{snapshot-name}  # 设置保护位
     rbd clone {pool-name}/{parent-image}@{snap-name} {pool-name}/{child-image-name}  # 快速克隆
     rbd flatten {pool-name}/{image-name}  # 扁平化，解除父子关系
+    
+    rbd copy {pool-name}/{source-image} {pool-name}/{target-image} --image-feature layering # 复制镜像（不含快照）
     ```
   
   + 持久化备份
@@ -956,7 +979,7 @@ curl -X POST "https://10.80.251.37:8880/api/auth" \
   ceph rbd task add migration abort <image_spec>
   ceph rbd task cancel <task_id>
   ceph rbd task list {<task_id>}
-  ceph rbd task add trash remove <image_id_spec>
+  ceph rbd task add trash remove <image_id_spec>  rbd/a50d5ca79593e
   ceph rbd task add migration execute <image_spec>
   ```
 
@@ -1079,67 +1102,112 @@ dev=$1
 t=120
 echo $dev
 
-echo "============================预写    100%空间=========================="
+echo "============================预写1   100%空间=========================="
+fio -direct=1 -iodepth=64 -rw=write -ioengine=libaio -bs=1024k -time_based=1 -numjobs=1 -group_reporting -filename=$dev -name=test -size=100%
+echo "============================预写2   100%空间=========================="
 fio -direct=1 -iodepth=64 -rw=write -ioengine=libaio -bs=1024k -time_based=1 -numjobs=1 -group_reporting -filename=$dev -name=test -size=100%
 sleep 10
 
-declare -A "write_1024k"
-write_1024k["log"]="write_1024k.log"
-write_1024k["cmd"]="fio -direct=1 -iodepth=64 -rw=write -ioengine=libaio -bs=1024k -time_based=1 -numjobs=1  -runtime=$t -group_reporting -filename=$dev -name=test -size=10G"
-`${write_1024k["cmd"]} > ${write_1024k["log"]}`
-write_1024k["rst"]=`cat ${write_1024k["log"]}  | grep IOPS | cut -d= -f 3 | cut -d" " -f 1`
-write_1024k["util"]=`cat ${write_1024k["log"]}  | grep "util=" | awk -F= '{print $NF}'`
-printf "%-10s %-10s %-16s %-16s\n" " "            " "          "平均值" "磁盘利用率" >> ${test_rst}
-printf "%-15s %-13s %-12s %-12s\n" "吞吐量"       "1024k顺序写"  "${write_1024k["rst"]}  ${write_1024k["util"]}" >> ${test_rst}
-echo "============================吞吐量   1024k顺序写=========================="
-echo ${write_1024k["cmd"]}
-cat ${write_1024k["log"]}
-echo "=========================================================================="
-sleep 10
-
-declare -A "read_1024k"
-read_1024k["log"]="read_1024k.log"
-read_1024k["cmd"]="fio -direct=1 -iodepth=64 -rw=read -ioengine=libaio -bs=1024K -time_based=1 -numjobs=1  -runtime=$t -group_reporting -filename=$dev -name=test -size=10G"
-`${read_1024k["cmd"]} > ${read_1024k["log"]}`
-read_1024k["rst"]=`cat ${read_1024k["log"]}  | grep IOPS | cut -d= -f 3 | cut -d" " -f 1`
-read_1024k["util"]=`cat ${read_1024k["log"]}  | grep "util=" | awk -F= '{print $NF}'`
-printf "%-15s %-13s %-12s %-12s\n" "吞吐量"       "1024K顺序读" "${read_1024k["rst"]}  ${read_1024k["util"]}" >> ${test_rst}
-echo "============================吞吐量   1024K顺序读=========================="
-echo ${read_1024k["cmd"]}
-cat ${read_1024k["log"]}
-echo "=========================================================================="
-sleep 10
-
-declare -A "randwrite_4k"
-randwrite_4k["log"]="randwrite_4k.log"
-randwrite_4k["cmd"]="fio -direct=1 -iodepth=128 -rw=randwrite -ioengine=libaio -bs=4k -time_based=1 -numjobs=1 -runtime=$t -group_reporting -filename=$dev -name=test -size=10G"
-`${randwrite_4k["cmd"]} > ${randwrite_4k["log"]}`
-randwrite_4k["rst"]=`cat ${randwrite_4k["log"]}  | grep "IOPS" | cut -d, -f 1 | cut -d= -f 2`
-randwrite_4k["util"]=`cat ${randwrite_4k["log"]}  | grep "util=" | awk -F= '{print $NF}'`
-printf "%-12s %-13s %-12s %-12s\n" "IOPS"  "4K随机写"  "${randwrite_4k["rst"]}  ${randwrite_4k["util"]}" >> ${test_rst}
-echo "============================IOPS  4K随机写================================"
-echo ${randwrite_4k["cmd"]}
-cat ${randwrite_4k["log"]}
-echo "=========================================================================="
-sleep 10
-
+sync && echo 3 | sudo tee /proc/sys/vm/drop_caches  
+  
 declare -A "randread_4k"
 randread_4k["log"]="randread_4k.log"
-randread_4k["cmd"]="fio -direct=1 -iodepth=128 -rw=randread -ioengine=libaio -bs=4k -time_based=1 -numjobs=1 -runtime=$t -group_reporting -filename=$dev -name=test -size=10G"
+randread_4k["cmd"]="fio -direct=1 -iodepth=128 -rw=randread -ioengine=libaio -bs=4k -time_based=1 -numjobs=1 -runtime=$t -group_reporting -filename=$dev -name=test -size=20G"
 `${randread_4k["cmd"]} > ${randread_4k["log"]}`
 randread_4k["rst"]=`cat ${randread_4k["log"]}  | grep "IOPS" | cut -d, -f 1 | cut -d= -f 2`
 randread_4k["util"]=`cat ${randread_4k["log"]}  | grep "util=" | awk -F= '{print $NF}'`
-printf "%-12s %-13s %-12s %-12s\n" "IOPS"         "4K随机读"   "${randread_4k["rst"]}  ${randread_4k["util"]}" >> ${test_rst}
+printf "%-10s %-10s %-16s %-16s\n" " "            " "          "平均值" "磁盘利用率" >> ${test_rst}
+printf "%-12s %-13s %-12s %-12s\n" "IOPS"   "4K随机读"   "${randread_4k["rst"]}  ${randread_4k["util"]}  $(date)" >> ${test_rst}
+ 
 echo "============================IOPS  4K随机读================================"
 echo ${randread_4k["cmd"]}
 cat ${randread_4k["log"]}
 echo "=========================================================================="
-sleep 10
+ 
+sync
+echo 3 | sudo tee /proc/sys/vm/drop_caches
+  
+declare -A "randwrite_4k"
+randwrite_4k["log"]="randwrite_4k.log"
+randwrite_4k["cmd"]="fio -direct=1 -iodepth=128 -rw=randwrite -ioengine=libaio -bs=4k -time_based=1 -numjobs=1 -runtime=$t -group_reporting -filename=$dev -name=test -size=20G"
+`${randwrite_4k["cmd"]} > ${randwrite_4k["log"]}`
+randwrite_4k["rst"]=`cat ${randwrite_4k["log"]}  | grep "IOPS" | cut -d, -f 1 | cut -d= -f 2`
+randwrite_4k["util"]=`cat ${randwrite_4k["log"]}  | grep "util=" | awk -F= '{print $NF}'`
+printf "%-12s %-13s %-12s %-12s\n" "IOPS"  "4K随机写"  "${randwrite_4k["rst"]}  ${randwrite_4k["util"]}  $(date)" >> ${test_rst}
+ 
+echo "============================IOPS  4K随机写================================"
+echo ${randwrite_4k["cmd"]}
+cat ${randwrite_4k["log"]}
+echo "=========================================================================="
+   
+sync
+echo 3 | sudo tee /proc/sys/vm/drop_caches
+  
+declare -A "read_1024k"
+read_1024k["log"]="read_1024k.log"
+read_1024k["cmd"]="fio -direct=1 -iodepth=64 -rw=read -ioengine=libaio -bs=1024K -time_based=1 -numjobs=1  -runtime=$t -group_reporting -filename=$dev -name=test -size=20G"
+`${read_1024k["cmd"]} > ${read_1024k["log"]}`
+read_1024k["rst"]=`cat ${read_1024k["log"]}  | grep IOPS | cut -d= -f 3 | cut -d" " -f 1`
+read_1024k["util"]=`cat ${read_1024k["log"]}  | grep "util=" | awk -F= '{print $NF}'`
+printf "%-15s %-13s %-12s %-12s\n" "吞吐量"  "1024K顺序读" "${read_1024k["rst"]}  ${read_1024k["util"]}  $(date)" >> ${test_rst}
+ 
+echo "============================吞吐量   1024K顺序读=========================="
+echo ${read_1024k["cmd"]}
+cat ${read_1024k["log"]}
+echo "=========================================================================="
+ 
+sync
+echo 3 | sudo tee /proc/sys/vm/drop_caches  
+    
+declare -A "write_1024k"
+write_1024k["log"]="write_1024k.log"
+write_1024k["cmd"]="fio -direct=1 -iodepth=64 -rw=write -ioengine=libaio -bs=1024k -time_based=1 -numjobs=1  -runtime=$t -group_reporting -filename=$dev -name=test -size=20G"
+`${write_1024k["cmd"]} > ${write_1024k["log"]}`
+write_1024k["rst"]=`cat ${write_1024k["log"]}  | grep IOPS | cut -d= -f 3 | cut -d" " -f 1`
+write_1024k["util"]=`cat ${write_1024k["log"]}  | grep "util=" | awk -F= '{print $NF}'`
+printf "%-15s %-13s %-12s %-12s\n" "吞吐量"  "1024k顺序写"  "${write_1024k["rst"]}  ${write_1024k["util"]}  $(date)" >> ${test_rst}
+ 
+echo "============================吞吐量   1024k顺序写=========================="
+echo ${write_1024k["cmd"]}
+cat ${write_1024k["log"]}
+echo "=========================================================================="
+    
+sync
+echo 3 | sudo tee /proc/sys/vm/drop_caches
+    
+declare -A "read_4k"
+read_4k["log"]="read_4k.log"
+read_4k["cmd"]="fio -direct=1 -iodepth=1 -rw=read -ioengine=libaio -bs=4k -time_based=1 -numjobs=1 -runtime=$t -group_reporting -filename=$dev -name=test -size=20G"
+`${read_4k["cmd"]} > ${read_4k["log"]}`
+read_4k["rst"]=`cat ${read_4k["log"]}| grep -E "lat.*avg.*" | egrep -v "slat|clat" | sed 's/.*avg=//'| cut -d, -f1``cat ${read_4k["log"]}| grep -E "lat.*avg.*" | egrep -v "slat|clat" |sed 's/.*(//'| sed 's/).*//'`
+read_4k["util"]=`cat ${read_4k["log"]}  | grep "util=" | awk -F= '{print $NF}'`
+printf "%-15s %-13s %-12s %-12s\n" "平均响应时间"  "4K顺序读"  "${read_4k["rst"]}  ${read_4k["util"]}  $(date)" >> ${test_rst}
 
+echo "============================平均响应时间    4k顺序读========================"
+echo ${read_4k["cmd"]}
+cat ${read_4k["log"]}
+echo "=========================================================================="
+
+sync
+echo 3 | sudo tee /proc/sys/vm/drop_caches
+
+declare -A "write_4k"
+write_4k["log"]="write_4k.log"
+write_4k["cmd"]="fio -direct=1 -iodepth=1 -rw=write -ioengine=libaio -bs=4k -time_based=1 -numjobs=1 -runtime=$t -group_reporting -filename=$dev -name=test -size=20G"
+`${write_4k["cmd"]} > ${write_4k["log"]}`
+write_4k["rst"]=`cat ${write_4k["log"]}| grep -E "lat.*avg.*" | egrep -v "slat|clat" | sed 's/.*avg=//'| cut -d, -f1``cat ${write_4k["log"]}| grep -E "lat.*avg.*" | egrep -v "slat|clat" |sed 's/.*(//'| sed 's/).*//'`
+write_4k["util"]=`cat ${write_4k["log"]}  | grep "util=" | awk -F= '{print $NF}'`
+printf "%-15s %-13s %-12s %-12s\n" "平均响应时间"  "4K顺序写"   "${write_4k["rst"]}  ${write_4k["util"]}  $(date)" >> ${test_rst}
+
+echo "============================平均响应时间    4k顺序写========================"
+echo ${write_4k["cmd"]}
+cat ${write_4k["log"]}
+echo "=========================================================================="
+
+sync
+echo 3 | sudo tee /proc/sys/vm/drop_caches
+    
 cat ${test_rst}
-
-
-fio -direct=1 -iodepth=128 -rw=randrw -rwmixread=70 -ioengine=libaio -bs=8k -time_based=1 -numjobs=8 -runtime=120 -group_reporting -filename=/dev/vdc -name=test -size=10G
 ```
 
 > 1. 测试随机读写时，numjobs从8开始，12..16..20..逐渐往上加，直到IOPS不再上升
@@ -1502,7 +1570,7 @@ cannot unprotect: at least 2 children
 
 | 配置                               | 取值      | 说明                                                         |
 | ---------------------------------- | --------- | ------------------------------------------------------------ |
-| osd_tier_default_cache_mode        | writeback | 当CPU采用高速缓存时，它的写内存操作有两种模式：<br />一种称为“穿透”(Write-Through)模式，在这种模式中高速缓存对于写操作就好像不存在一样，每次写时都直接写到内存中，所以实际上只是对读操作使用高速缓存，因而效率相对较低。<br />另一种称为“回写”(Write-Back)模式，写的时候先写入高速缓存，然后由高速缓存的硬件在周转使用缓冲线时自动写入内存，或者由软件主动地“冲刷”有关的缓冲线。 |
+| osd_tier_default_cache_mode        | writeback | 当CPU采用高速缓存时，它的写内存操作有两种模式：<br />一种称为“穿透”(Write-Through)模式，在这种模式中高速缓存对于写操作就好像不存在一样，每次写时都需要写到内存和磁盘。但读操作还是有使用到高速缓存。<br />另一种称为“回写”(Write-Back)模式，写的时候先写入高速缓存，然后由高速缓存的硬件在周转使用缓冲线时自动写入内存，或者由软件主动地“冲刷”有关的缓冲线。 |
 | rbd_cache                          | true      | whether to enable caching (writeback unless rbd_cache_max_dirty is 0) |
 | rbd_cache_size                     | 32M       | Librbd 能使用的最大缓存大小                                  |
 | rbd_cache_max_dirty                | 24M       | 缓存中允许脏数据的最大值，用来控制回写大小，不能超过 rbd_cache_size。超过的话，应用的写入应该会被阻塞， |

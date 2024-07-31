@@ -133,17 +133,22 @@
    
    -- left join 直观理解
    SELECT 
-       table_1.a t1_a, table_1.b t1_b, 
-       table_1.c t1_c, table_1.uid t1_uid,
-       table_2.uid t2_uid, table_2.a t2_a,
-       table_2.b t2_b
+       table_1.a t1_a, table_1.uid t1_uid,
+       table_2.uid t2_uid, table_2.a t2_a
    FROM table_1
        LEFT JOIN table_2
        ON table_1.uid = table_2.uid;
-   t1_a	t1_b	t1_c	t1_uid	t2_uid	t2_a	t2_b
-   100		101		102		1		1		10		10
-   200		201		202		2		2		20		10
-   300		301		302		3		NULL	NULL	NULL
+   t1_a	t1_uid	t2_uid	t2_a
+   100		1		1		10	
+   200		2		2		20	
+   300		3		NULL	NULL
+   ```
+
+7. limit 1 避免全表查询
+
+   ``` sql
+   select * from user where email = ? 
+   select * from user where email = ? limit 1
    ```
 
 ### Select 执行顺序
@@ -202,8 +207,6 @@ LIMIT
 set global slow_query_log=ON  -- 开启慢查询
 set global long_query_time=2  -- 超过2s算作慢查询，记录到日志中
 set global long_querise_not_using_indexex=ON  -- 记录下没有使用索引的查询语句
-
-# 慢查询相关配置
 show variables like '%slow_query%';
 # 查看正在执行的进程
 show processlist;
@@ -211,6 +214,19 @@ show processlist;
 SELECT * FROM INFORMATION_SCHEMA.INNODB_TRX\G;
 # 查看当前事务持有锁信息
 SELECT * FROM performance_schema.data_locks\G;
+
+# general_log 获取所有的SQL再写脚本EXPLAIN输出执行计划
+show variables like 'general_log';
+show variables like 'general_log_file';
+show variables like 'log_output'
+set global general_log=on;
+set global general_log_log='/logs/general.log';
+set global log_output='TABLE';
+select event_time,user_host,thread_id,server_id,command_type, convert(argument using utf8mb4) as text from general_log limit 100;
+
+
+# pt-query-digest
+
 ```
 
 ### 执行计划
